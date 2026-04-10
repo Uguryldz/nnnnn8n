@@ -464,7 +464,7 @@ export class FrontendService {
 			provisioning: false, // temporarily disabled until this feature is ready for release
 			advancedExecutionFilters: this.license.isAdvancedExecutionFiltersEnabled(),
 			variables: true,
-			sourceControl: true,
+			sourceControl: false,
 			externalSecrets: this.license.isExternalSecretsEnabled(),
 			showNonProdBanner: this.license.isLicensed(LICENSE_FEATURES.SHOW_NON_PROD_BANNER),
 			debugInEditor: this.license.isDebugInEditorLicensed(),

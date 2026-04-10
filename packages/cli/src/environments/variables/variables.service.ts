@@ -15,7 +15,8 @@ import { VariableCountLimitReachedError } from '@/errors/variable-count-limit-re
 import { VariableValidationError } from '@/errors/variable-validation.error';
 import { EventService } from '@/events/event.service';
 import { CacheService } from '@/services/cache/cache.service';
-import { ProjectService } from '@/services/project.service.ee';
+
+import { findProjectWithAccess, findAccessibleProjectIds } from './project-access';
 
 const projectVariableScopes: Partial<Record<Scope, Scope>> = {
 	'variable:list': 'projectVariable:list',
@@ -32,7 +33,6 @@ export class VariablesService {
 		private readonly variablesRepository: VariablesRepository,
 		private readonly eventService: EventService,
 		private readonly licenseState: LicenseState,
-		private readonly projectService: ProjectService,
 	) {}
 
 	private async findAll() {
@@ -58,7 +58,7 @@ export class VariablesService {
 			throw new Error(`No project variable scope mapping for scope "${scope}"`);
 
 		// Check if user has access to the specific project with the required variable scope
-		const project = await this.projectService.getProjectWithScope(user, projectId, [
+		const project = await findProjectWithAccess(user, projectId, [
 			projectVariableScope,
 		]);
 
@@ -101,7 +101,7 @@ export class VariablesService {
 	): Promise<Variables[]> {
 		const allCachedVariables = await this.getAllCached();
 		const canListGlobalVariables = hasGlobalScope(user, 'variable:list');
-		const projectIds = await this.projectService.getProjectIdsWithScope(user, [
+		const projectIds = await findAccessibleProjectIds(user, [
 			'projectVariable:list',
 		]);
 
