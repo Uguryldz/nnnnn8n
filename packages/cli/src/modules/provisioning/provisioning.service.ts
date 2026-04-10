@@ -54,6 +54,16 @@ export class CustomProvisioningService {
 		return this.cached;
 	}
 
+	async isInstanceRoleManaged(): Promise<boolean> {
+		const cfg = await this.getConfig();
+		return cfg.scopesProvisionInstanceRole || cfg.scopesUseExpressionMapping;
+	}
+
+	async isProjectRoleManaged(): Promise<boolean> {
+		const cfg = await this.getConfig();
+		return cfg.scopesProvisionProjectRoles || cfg.scopesUseExpressionMapping;
+	}
+
 	private async load(): Promise<ProvisioningConfigDto> {
 		const row = await this.settings.findByKey(CONFIG_KEY);
 		if (!row) return DEFAULT_CONFIG;

@@ -29,7 +29,7 @@ import { BadRequestError } from '@/errors/response-errors/bad-request.error';
 import { ForbiddenError } from '@/errors/response-errors/forbidden.error';
 import { NotFoundError } from '@/errors/response-errors/not-found.error';
 import { EventService } from '@/events/event.service';
-import { ProvisioningService } from '@/modules/provisioning.ee/provisioning.service.ee';
+import { CustomProvisioningService } from '@/modules/provisioning/provisioning.service';
 import type { ProjectRequest } from '@/requests';
 import {
 	ProjectService,
@@ -45,7 +45,7 @@ export class ProjectController {
 		private readonly projectRepository: ProjectRepository,
 		private readonly eventService: EventService,
 		private readonly userManagementMailer: UserManagementMailer,
-		private readonly provisioningService: ProvisioningService,
+		private readonly provisioningService: CustomProvisioningService,
 	) {}
 
 	@Get('/')

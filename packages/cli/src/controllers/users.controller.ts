@@ -41,7 +41,7 @@ import { ForbiddenError } from '@/errors/response-errors/forbidden.error';
 import { NotFoundError } from '@/errors/response-errors/not-found.error';
 import { EventService } from '@/events/event.service';
 import { ExternalHooks } from '@/external-hooks';
-import { ProvisioningService } from '@/modules/provisioning.ee/provisioning.service.ee';
+import { CustomProvisioningService } from '@/modules/provisioning/provisioning.service';
 import { UserRequest } from '@/requests';
 import { FolderService } from '@/services/folder.service';
 import { UserService } from '@/services/user.service';
@@ -66,7 +66,7 @@ export class UsersController {
 		private readonly folderService: FolderService,
 		private readonly jwtService: JwtService,
 		private readonly urlService: UrlService,
-		private readonly provisioningService: ProvisioningService,
+		private readonly provisioningService: CustomProvisioningService,
 	) {}
 
 	static ERROR_MESSAGES = {
