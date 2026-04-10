@@ -470,11 +470,11 @@ export class FrontendService {
 			debugInEditor: this.license.isDebugInEditorLicensed(),
 			binaryDataS3: isS3Available && isS3Selected && isS3Licensed,
 			workerView: this.license.isWorkerViewLicensed(),
-			advancedPermissions: this.license.isAdvancedPermissionsLicensed(),
+			advancedPermissions: true,
 
 			workflowDiffs: this.licenseState.isWorkflowDiffsLicensed(),
 			namedVersions: this.license.isLicensed(LICENSE_FEATURES.NAMED_VERSIONS),
-			customRoles: this.licenseState.isCustomRolesLicensed(),
+			customRoles: true,
 			personalSpacePolicy: this.licenseState.isPersonalSpacePolicyLicensed(),
 			dataRedaction: this.licenseState.isDataRedactionLicensed(),
 		});
