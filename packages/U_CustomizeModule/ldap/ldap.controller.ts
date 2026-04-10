@@ -5,66 +5,54 @@ import { BadRequestError } from '@/errors/response-errors/bad-request.error';
 import { EventService } from '@/events/event.service';
 
 import { NON_SENSIBLE_LDAP_CONFIG_PROPERTIES } from './constants';
-import { getLdapSynchronizations } from './helpers';
 import { LdapService } from './ldap.service';
 import { LdapConfiguration } from './types';
 
 @RestController('/ldap')
 export class LdapController {
 	constructor(
-		private readonly ldapService: LdapService,
-		private readonly eventService: EventService,
+		private readonly svc: LdapService,
+		private readonly events: EventService,
 	) {}
 
 	@Get('/config')
 	@GlobalScope('ldap:manage')
-	async getConfig() {
-		return await this.ldapService.loadConfig();
+	async config() {
+		return await this.svc.fetchConfig();
 	}
 
 	@Post('/test-connection')
 	@GlobalScope('ldap:manage')
-	async testConnection() {
-		try {
-			await this.ldapService.testConnection();
-		} catch (error) {
-			throw new BadRequestError((error as { message: string }).message);
-		}
+	async test() {
+		try { await this.svc.verifyConnection(); }
+		catch (e) { throw new BadRequestError((e as Error).message); }
 	}
 
 	@Put('/config')
 	@GlobalScope('ldap:manage')
-	async updateConfig(req: LdapConfiguration.Update) {
-		try {
-			await this.ldapService.updateConfig(req.body);
-		} catch (error) {
-			throw new BadRequestError((error as { message: string }).message);
-		}
+	async save(req: LdapConfiguration.Update) {
+		try { await this.svc.persistConfig(req.body); }
+		catch (e) { throw new BadRequestError((e as Error).message); }
 
-		const data = await this.ldapService.loadConfig();
-
-		this.eventService.emit('ldap-settings-updated', {
+		const result = await this.svc.fetchConfig();
+		this.events.emit('ldap-settings-updated', {
 			userId: req.user.id,
-			...pick(data, NON_SENSIBLE_LDAP_CONFIG_PROPERTIES),
+			...pick(result, NON_SENSIBLE_LDAP_CONFIG_PROPERTIES),
 		});
-
-		return data;
+		return result;
 	}
 
 	@Get('/sync')
 	@GlobalScope('ldap:sync')
-	async getLdapSync(req: LdapConfiguration.GetSync) {
+	async history(req: LdapConfiguration.GetSync) {
 		const { page = '0', perPage = '20' } = req.query;
-		return await getLdapSynchronizations(parseInt(page, 10), parseInt(perPage, 10));
+		return await this.svc.getSyncHistory(parseInt(page, 10), parseInt(perPage, 10));
 	}
 
 	@Post('/sync')
 	@GlobalScope('ldap:sync')
-	async syncLdap(req: LdapConfiguration.Sync) {
-		try {
-			await this.ldapService.runSync(req.body.type);
-		} catch (error) {
-			throw new BadRequestError((error as { message: string }).message);
-		}
+	async sync(req: LdapConfiguration.Sync) {
+		try { await this.svc.runSync(req.body.type); }
+		catch (e) { throw new BadRequestError((e as Error).message); }
 	}
 }

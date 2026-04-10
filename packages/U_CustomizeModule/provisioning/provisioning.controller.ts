@@ -1,20 +1,21 @@
 import { AuthenticatedRequest } from '@n8n/db';
 import { Get, GlobalScope, Patch, RestController } from '@n8n/decorators';
-import { ProvisioningService } from '../provisioning.ee/provisioning.service.ee';
+
+import { CustomProvisioningService } from './provisioning.service';
 
 @RestController('/sso/provisioning')
 export class ProvisioningController {
-	constructor(private readonly provisioningService: ProvisioningService) {}
+	constructor(private readonly svc: CustomProvisioningService) {}
 
 	@Get('/config')
 	@GlobalScope('provisioning:manage')
 	async getConfig() {
-		return await this.provisioningService.getConfig();
+		return await this.svc.getConfig();
 	}
 
 	@Patch('/config')
 	@GlobalScope('provisioning:manage')
 	async patchConfig(req: AuthenticatedRequest) {
-		return await this.provisioningService.patchConfig(req.body);
+		return await this.svc.patchConfig(req.body);
 	}
 }

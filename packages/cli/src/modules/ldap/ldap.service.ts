@@ -1,9 +1,18 @@
 import { Logger } from '@n8n/backend-common';
 import { GlobalConfig } from '@n8n/config';
-import type { LdapConfig } from '@n8n/constants';
+import type { LdapConfig, ConnectionSecurity } from '@n8n/constants';
 import { LDAP_FEATURE_NAME } from '@n8n/constants';
-import { isValidEmail, SettingsRepository, User } from '@n8n/db';
-import type { RunningMode, SyncStatus } from '@n8n/db';
+import type { AuthProviderSyncHistory, RunningMode, SyncStatus } from '@n8n/db';
+import {
+	AuthIdentity,
+	AuthIdentityRepository,
+	AuthProviderSyncHistoryRepository,
+	GLOBAL_MEMBER_ROLE,
+	isValidEmail,
+	SettingsRepository,
+	User,
+	UserRepository,
+} from '@n8n/db';
 import { Constructable, Container } from '@n8n/di';
 import type { IPasswordAuthHandler } from '@n8n/decorators';
 import { AuthHandler } from '@n8n/decorators';
@@ -11,553 +20,548 @@ import { QueryFailedError } from '@n8n/typeorm';
 import type { Entry as LdapUser, ClientOptions, Client } from 'ldapts';
 import { Cipher } from 'n8n-core';
 import { jsonParse, UnexpectedError } from 'n8n-workflow';
+import { randomString } from 'n8n-workflow';
 import type { ConnectionOptions } from 'tls';
+import { validate } from 'jsonschema';
+import { Filter } from 'ldapts/filters/Filter';
 
 import { BadRequestError } from '@/errors/response-errors/bad-request.error';
 import { InternalServerError } from '@/errors/response-errors/internal-server.error';
 import { EventService } from '@/events/event.service';
 import {
-	getCurrentAuthenticationMethod,
-	isEmailCurrentAuthenticationMethod,
-	isLdapCurrentAuthenticationMethod,
-	setCurrentAuthenticationMethod,
-} from '@/sso.ee/sso-helpers';
+	currentAuthMethod,
+	isEmailAuth,
+	isLdapAuth,
+	setCurrentAuthMethod,
+} from './auth-method-utils';
 
-import { BINARY_AD_ATTRIBUTES } from './constants';
-import {
-	createLdapUserOnLocalDb,
-	getUserByEmail,
-	getAuthIdentityByLdapId,
-	mapLdapAttributesToUser,
-	createLdapAuthIdentity,
-	updateLdapUserOnLocalDb,
-	createFilter,
-	deleteAllLdapIdentities,
-	escapeFilter,
-	formatUrl,
-	getLdapIds,
-	getLdapUsers,
-	getMappingAttributes,
-	mapLdapUserToDbUser,
-	processUsers,
-	resolveBinaryAttributes,
-	resolveEntryBinaryAttributes,
-	saveLdapSynchronization,
-	validateLdapConfigurationSchema,
-	getUserByLdapId,
-} from './helpers';
+import { BINARY_AD_ATTRIBUTES, LDAP_CONFIG_SCHEMA } from './constants';
 
 @AuthHandler()
 export class LdapService implements IPasswordAuthHandler<User> {
 	readonly metadata = { name: 'ldap', type: 'password' as const };
-	private client: Client | undefined;
-
-	// eslint-disable-next-line @typescript-eslint/consistent-type-imports
-	private ldapts: typeof import('ldapts');
-
-	private syncTimer: NodeJS.Timeout | undefined = undefined;
-
-	config: LdapConfig;
-
 	readonly userClass: Constructable<User> = User;
+
+	private connection: Client | undefined;
+	private ldapLib: typeof import('ldapts');
+	private periodicSync: NodeJS.Timeout | undefined;
+	config: LdapConfig;
 
 	constructor(
 		private readonly logger: Logger,
-		private readonly settingsRepository: SettingsRepository,
+		private readonly settingsRepo: SettingsRepository,
 		private readonly cipher: Cipher,
-		private readonly eventService: EventService,
+		private readonly events: EventService,
 	) {}
 
+	// ── Lifecycle ──────────────────────────────────────────────
+
 	async init() {
-		const ldapConfig = await this.loadConfig();
-
+		const cfg = await this.fetchConfig();
 		try {
-			await this.setGlobalLdapConfigVariables(ldapConfig);
-		} catch (error) {
+			await this.applyGlobalSettings(cfg);
+		} catch (err) {
 			this.logger.warn(
-				`Cannot set LDAP login enabled state when an authentication method other than email or ldap is active (current: ${getCurrentAuthenticationMethod()})`,
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-				error,
+				`LDAP config init skipped – active auth method: ${currentAuthMethod()}`,
+				{ error: (err as Error).message },
 			);
 		}
-
-		this.setConfig(ldapConfig);
+		this.applyConfig(cfg);
 	}
 
-	/** Retrieve the LDAP configuration (decrypted) from the database */
-	async loadConfig() {
-		const { value } = await this.settingsRepository.findOneByOrFail({
-			key: LDAP_FEATURE_NAME,
-		});
-		const ldapConfig = jsonParse<LdapConfig>(value);
+	// ── Config persistence ─────────────────────────────────────
 
-		// Apply secure default for new security field on existing instances
-		if (ldapConfig.enforceEmailUniqueness === undefined) {
-			ldapConfig.enforceEmailUniqueness = true;
-		}
-
-		ldapConfig.bindingAdminPassword = this.cipher.decrypt(ldapConfig.bindingAdminPassword);
-		return ldapConfig;
+	async fetchConfig(): Promise<LdapConfig> {
+		const row = await this.settingsRepo.findOneByOrFail({ key: LDAP_FEATURE_NAME });
+		const cfg = jsonParse<LdapConfig>(row.value);
+		if (cfg.enforceEmailUniqueness === undefined) cfg.enforceEmailUniqueness = true;
+		cfg.bindingAdminPassword = this.cipher.decrypt(cfg.bindingAdminPassword);
+		return cfg;
 	}
 
-	async updateConfig(ldapConfig: LdapConfig): Promise<void> {
-		const { valid, message } = validateLdapConfigurationSchema(ldapConfig);
+	async persistConfig(cfg: LdapConfig): Promise<void> {
+		const result = this.validateSchema(cfg);
+		if (!result.ok) throw new UnexpectedError(result.detail);
 
-		if (!valid) {
-			throw new UnexpectedError(message);
+		if (cfg.loginEnabled && ['saml', 'oidc'].includes(currentAuthMethod())) {
+			throw new BadRequestError('LDAP cannot be enabled while another SSO method is active');
 		}
 
-		if (ldapConfig.loginEnabled && ['saml', 'oidc'].includes(getCurrentAuthenticationMethod())) {
-			throw new BadRequestError('LDAP cannot be enabled if SSO in enabled');
+		this.applyConfig({ ...cfg });
+
+		const encrypted = { ...cfg, bindingAdminPassword: this.cipher.encrypt(cfg.bindingAdminPassword) };
+
+		if (!encrypted.loginEnabled) {
+			encrypted.synchronizationEnabled = false;
+			const managed = await this.findManagedUsers();
+			if (managed.length) await this.purgeAllIdentities();
 		}
 
-		this.setConfig({ ...ldapConfig });
-
-		ldapConfig.bindingAdminPassword = this.cipher.encrypt(ldapConfig.bindingAdminPassword);
-
-		if (!ldapConfig.loginEnabled) {
-			ldapConfig.synchronizationEnabled = false;
-			const ldapUsers = await getLdapUsers();
-			if (ldapUsers.length) {
-				await deleteAllLdapIdentities();
-			}
-		}
-
-		await this.settingsRepository.update(
+		await this.settingsRepo.update(
 			{ key: LDAP_FEATURE_NAME },
-			{ value: JSON.stringify(ldapConfig), loadOnStartup: true },
+			{ value: JSON.stringify(encrypted), loadOnStartup: true },
 		);
-		await this.setGlobalLdapConfigVariables(ldapConfig);
+		await this.applyGlobalSettings(cfg);
 	}
 
-	/** Set the LDAP configuration and expire the current client */
-	setConfig(ldapConfig: LdapConfig) {
-		this.config = ldapConfig;
-		this.client = undefined;
-		// If user disabled synchronization in the UI and there a job schedule,
-		// stop it
-		if (this.syncTimer && !this.config.synchronizationEnabled) {
-			this.stopSync();
-			// If instance crashed with a job scheduled, once the server starts
-			// again, reschedule it.
-		} else if (!this.syncTimer && this.config.synchronizationEnabled) {
-			this.scheduleSync();
-			// If job scheduled and the run interval got updated in the UI
-			// stop the current one and schedule a new one with the new internal
-		} else if (this.syncTimer && this.config.synchronizationEnabled) {
-			this.stopSync();
-			this.scheduleSync();
-		}
+	// ── Connection ─────────────────────────────────────────────
+
+	async verifyConnection(): Promise<void> {
+		await this.adminBind();
 	}
 
-	/** Take the LDAP configuration and set login enabled and login label to the config object */
-	private async setGlobalLdapConfigVariables(ldapConfig: LdapConfig): Promise<void> {
-		await this.setLdapLoginEnabled(ldapConfig.loginEnabled);
-		Container.get(GlobalConfig).sso.ldap.loginLabel = ldapConfig.loginLabel;
-	}
+	private async ensureClient() {
+		if (!this.config) throw new UnexpectedError('LDAP config not loaded');
+		if (this.connection) return;
 
-	/** Set the LDAP login enabled to the configuration object */
-	private async setLdapLoginEnabled(enabled: boolean): Promise<void> {
-		const currentAuthenticationMethod = getCurrentAuthenticationMethod();
-		if (enabled && !isEmailCurrentAuthenticationMethod() && !isLdapCurrentAuthenticationMethod()) {
-			throw new InternalServerError(
-				`Cannot switch LDAP login enabled state when an authentication method other than email or ldap is active (current: ${currentAuthenticationMethod})`,
-			);
+		if (!this.ldapLib) this.ldapLib = await import('ldapts');
+
+		const proto = this.config.connectionSecurity === 'tls' ? 'ldaps' : 'ldap';
+		const addr = `${proto}://${this.config.connectionUrl}:${this.config.connectionPort}`;
+		const opts: ClientOptions = { url: addr };
+		const tls: ConnectionOptions = {};
+
+		if (this.config.connectionSecurity !== 'none') {
+			tls.rejectUnauthorized = !this.config.allowUnauthorizedCerts;
+			if (this.config.connectionSecurity === 'tls') opts.tlsOptions = tls;
 		}
 
-		Container.get(GlobalConfig).sso.ldap.loginEnabled = enabled;
+		this.connection = new this.ldapLib.Client(opts);
 
-		const targetAuthenticationMethod =
-			!enabled && currentAuthenticationMethod === 'ldap' ? 'email' : currentAuthenticationMethod;
-
-		await setCurrentAuthenticationMethod(enabled ? 'ldap' : targetAuthenticationMethod);
-	}
-
-	/**
-	 * Get new/existing LDAP client,
-	 * depending on whether the credentials
-	 * were updated or not
-	 */
-	private async getClient() {
-		if (this.config === undefined) {
-			throw new UnexpectedError('Service cannot be used without setting the property config');
-		}
-		if (this.client === undefined) {
-			if (!this.ldapts) {
-				this.ldapts = await import('ldapts');
-			}
-
-			const url = formatUrl(
-				this.config.connectionUrl,
-				this.config.connectionPort,
-				this.config.connectionSecurity,
-			);
-			const ldapOptions: ClientOptions = { url };
-			const tlsOptions: ConnectionOptions = {};
-
-			if (this.config.connectionSecurity !== 'none') {
-				Object.assign(tlsOptions, {
-					rejectUnauthorized: !this.config.allowUnauthorizedCerts,
-				});
-				if (this.config.connectionSecurity === 'tls') {
-					ldapOptions.tlsOptions = tlsOptions;
-				}
-			}
-
-			this.client = new this.ldapts.Client(ldapOptions);
-			if (this.config.connectionSecurity === 'startTls') {
-				await this.client.startTLS(tlsOptions);
-			}
+		if (this.config.connectionSecurity === 'startTls') {
+			await this.connection.startTLS(tls);
 		}
 	}
 
-	/**
-	 * Attempt a binding with the admin credentials
-	 */
-	private async bindAdmin(): Promise<void> {
-		await this.getClient();
-		if (this.client) {
-			await this.client.bind(this.config.bindingAdminDn, this.config.bindingAdminPassword);
+	private async adminBind() {
+		await this.ensureClient();
+		if (this.connection) {
+			await this.connection.bind(this.config.bindingAdminDn, this.config.bindingAdminPassword);
 		}
 	}
 
-	/**
-	 * Search the LDAP server using the administrator binding
-	 * (if any, else a anonymous binding will be attempted)
-	 */
-	async searchWithAdminBinding(filter: string): Promise<LdapUser[]> {
-		await this.bindAdmin();
-		if (this.client) {
-			const { searchEntries } = await this.client.search(this.config.baseDn, {
-				attributes: getMappingAttributes(this.config),
-				explicitBufferAttributes: BINARY_AD_ATTRIBUTES,
-				filter,
-				timeLimit: this.config.searchTimeout,
-				paged: { pageSize: this.config.searchPageSize },
-				...(this.config.searchPageSize === 0 && { paged: true }),
-			});
+	private async queryDirectory(filter: string): Promise<LdapUser[]> {
+		await this.adminBind();
+		if (!this.connection) return [];
 
-			await this.client.unbind();
-			return searchEntries;
-		}
-		return [];
-	}
+		const attrs = [
+			this.config.emailAttribute,
+			this.config.ldapIdAttribute,
+			this.config.firstNameAttribute,
+			this.config.lastNameAttribute,
+		];
 
-	/**
-	 * Check if multiple LDAP accounts exist with the same email address.
-	 * Returns true if duplicates found, false otherwise.
-	 * This prevents privilege escalation attacks via email-based account linking.
-	 */
-	private async hasEmailDuplicatesInLdap(email: string): Promise<boolean> {
-		try {
-			const searchResults = await this.searchWithAdminBinding(
-				createFilter(
-					`(${this.config.emailAttribute}=${escapeFilter(email)})`,
-					this.config.userFilter,
-				),
-			);
-
-			// If more than one LDAP entry has this email, it's a duplicate
-			return searchResults.length > 1;
-		} catch (error) {
-			// Log error but don't block login if search fails
-			this.logger.error('LDAP - Error checking for duplicate emails', {
-				email,
-				error: error instanceof Error ? error.message : 'Unknown error',
-			});
-			// Fail closed: treat search errors as potential duplicates for security
-			return true;
-		}
-	}
-
-	/**
-	 * Attempt binding with the user's credentials
-	 */
-	async validUser(dn: string, password: string): Promise<void> {
-		await this.getClient();
-		if (this.client) {
-			await this.client.bind(dn, password);
-			await this.client.unbind();
-		}
-	}
-
-	/**
-	 * Find and authenticate user in the LDAP server.
-	 */
-	async findAndAuthenticateLdapUser(
-		loginId: string,
-		password: string,
-		loginIdAttribute: string,
-		userFilter: string,
-	): Promise<LdapUser | undefined> {
-		// Search for the user with the administrator binding using the
-		// the Login ID attribute and whatever was inputted in the UI's
-		// email input.
-		let searchResult: LdapUser[] = [];
-
-		try {
-			searchResult = await this.searchWithAdminBinding(
-				createFilter(`(${loginIdAttribute}=${escapeFilter(loginId)})`, userFilter),
-			);
-		} catch (e) {
-			if (e instanceof Error) {
-				this.eventService.emit('ldap-login-sync-failed', { error: e.message });
-				this.logger.error('LDAP - Error during search', { message: e.message });
-			}
-			return undefined;
-		}
-
-		if (!searchResult.length) {
-			return undefined;
-		}
-
-		// In the unlikely scenario that more than one user is found (
-		// can happen depending on how the LDAP database is structured
-		// and the LDAP configuration), return the last one found as it
-		// should be the less important in the hierarchy.
-		let user = searchResult.pop();
-
-		if (user === undefined) {
-			user = { dn: '' };
-		}
-
-		try {
-			// Now with the user distinguished name (unique identifier
-			// for the user) and the password, attempt to validate the
-			// user by binding
-			await this.validUser(user.dn, password);
-		} catch (e) {
-			if (e instanceof Error) {
-				this.logger.error('LDAP - Error validating user against LDAP server', {
-					message: e.message,
-				});
-			}
-			return undefined;
-		}
-
-		resolveEntryBinaryAttributes(user);
-
-		return user;
-	}
-
-	/**
-	 * Attempt binding with the administrator credentials, to test the connection
-	 */
-	async testConnection(): Promise<void> {
-		await this.bindAdmin();
-	}
-
-	/** Schedule a synchronization job based on the interval set in the LDAP config */
-	private scheduleSync(): void {
-		if (!this.config.synchronizationInterval) {
-			throw new UnexpectedError('Interval variable has to be defined');
-		}
-		this.syncTimer = setInterval(async () => {
-			await this.runSync('live');
-		}, this.config.synchronizationInterval * 60000);
-	}
-
-	/**
-	 * Run the synchronization job.
-	 * If the job runs in "live" mode, changes to LDAP users are persisted in the database, else the users are not modified
-	 */
-	async runSync(mode: RunningMode): Promise<void> {
-		this.logger.debug(`LDAP - Starting a synchronization run in ${mode} mode`);
-
-		let adUsers: LdapUser[] = [];
-
-		try {
-			adUsers = await this.searchWithAdminBinding(
-				createFilter(`(${this.config.loginIdAttribute}=*)`, this.config.userFilter),
-			);
-
-			this.logger.debug('LDAP - Users return by the query', {
-				users: adUsers,
-			});
-
-			resolveBinaryAttributes(adUsers);
-		} catch (e) {
-			if (e instanceof Error) {
-				this.logger.error(`LDAP - ${e.message}`);
-				throw e;
-			}
-		}
-
-		const startedAt = new Date();
-
-		const localAdUsers = await getLdapIds();
-
-		const { usersToCreate, usersToUpdate, usersToDisable } = this.getUsersToProcess(
-			adUsers,
-			localAdUsers,
-		);
-
-		const filteredUsersToCreate = usersToCreate.filter(([id, user]) => {
-			if (!isValidEmail(user.email)) {
-				this.logger.warn(`LDAP - Invalid email format for user ${id}`);
-				return false;
-			}
-			return true;
+		const { searchEntries } = await this.connection.search(this.config.baseDn, {
+			attributes: attrs,
+			explicitBufferAttributes: BINARY_AD_ATTRIBUTES,
+			filter,
+			timeLimit: this.config.searchTimeout,
+			paged: this.config.searchPageSize === 0 ? true : { pageSize: this.config.searchPageSize },
 		});
 
-		const filteredUsersToUpdate = usersToUpdate.filter(([id, user]) => {
-			if (!isValidEmail(user.email)) {
-				this.logger.warn(`LDAP - Invalid email format for user ${id}`);
-				return false;
-			}
-			return true;
-		});
+		await this.connection.unbind();
+		return searchEntries;
+	}
 
-		this.logger.debug('LDAP - Users to process', {
-			created: filteredUsersToCreate.length,
-			updated: filteredUsersToUpdate.length,
-			disabled: usersToDisable.length,
-		});
-
-		const endedAt = new Date();
-		let status: SyncStatus = 'success';
-		let errorMessage = '';
-
-		try {
-			if (mode === 'live') {
-				await processUsers(filteredUsersToCreate, filteredUsersToUpdate, usersToDisable);
-			}
-		} catch (error) {
-			if (error instanceof QueryFailedError) {
-				status = 'error';
-				errorMessage = `${error.message}`;
-			}
+	private async verifyCredentials(dn: string, pwd: string) {
+		await this.ensureClient();
+		if (this.connection) {
+			await this.connection.bind(dn, pwd);
+			await this.connection.unbind();
 		}
-
-		await saveLdapSynchronization({
-			startedAt,
-			endedAt,
-			created: filteredUsersToCreate.length,
-			updated: filteredUsersToUpdate.length,
-			disabled: usersToDisable.length,
-			scanned: adUsers.length,
-			runMode: mode,
-			status,
-			error: errorMessage,
-		});
-
-		this.eventService.emit('ldap-general-sync-finished', {
-			type: !this.syncTimer ? 'scheduled' : `manual_${mode}`,
-			succeeded: true,
-			usersSynced:
-				filteredUsersToCreate.length + filteredUsersToUpdate.length + usersToDisable.length,
-			error: errorMessage,
-		});
-
-		this.logger.debug('LDAP - Synchronization finished successfully');
 	}
 
-	/** Stop the current job scheduled, if any */
-	stopSync(): void {
-		clearInterval(this.syncTimer);
-		this.syncTimer = undefined;
-	}
-
-	/** Get all the user that will be changed (created, updated, disabled), in the database */
-	private getUsersToProcess(
-		adUsers: LdapUser[],
-		localAdUsers: string[],
-	): {
-		usersToCreate: Array<[string, User]>;
-		usersToUpdate: Array<[string, User]>;
-		usersToDisable: string[];
-	} {
-		return {
-			usersToCreate: this.getUsersToCreate(adUsers, localAdUsers),
-			usersToUpdate: this.getUsersToUpdate(adUsers, localAdUsers),
-			usersToDisable: this.getUsersToDisable(adUsers, localAdUsers),
-		};
-	}
-
-	/** Get users in LDAP that are not in the database yet */
-	private getUsersToCreate(
-		remoteAdUsers: LdapUser[],
-		localLdapIds: string[],
-	): Array<[string, User]> {
-		return remoteAdUsers
-			.filter((adUser) => !localLdapIds.includes(adUser[this.config.ldapIdAttribute] as string))
-			.map((adUser) => mapLdapUserToDbUser(adUser, this.config, true));
-	}
-
-	/** Get users in LDAP that are already in the database */
-	private getUsersToUpdate(
-		remoteAdUsers: LdapUser[],
-		localLdapIds: string[],
-	): Array<[string, User]> {
-		return remoteAdUsers
-			.filter((adUser) => localLdapIds.includes(adUser[this.config.ldapIdAttribute] as string))
-			.map((adUser) => mapLdapUserToDbUser(adUser, this.config));
-	}
-
-	/** Get users that are in the database but not in the LDAP server */
-	private getUsersToDisable(remoteAdUsers: LdapUser[], localLdapIds: string[]): string[] {
-		const remoteAdUserIds = remoteAdUsers.map((adUser) => adUser[this.config.ldapIdAttribute]);
-		return localLdapIds.filter((user) => !remoteAdUserIds.includes(user));
-	}
+	// ── Authentication ─────────────────────────────────────────
 
 	async handleLogin(loginId: string, password: string): Promise<User | undefined> {
 		if (!this.config.loginEnabled) return undefined;
 
-		const { loginIdAttribute, userFilter } = this.config;
-
-		const ldapUser = await this.findAndAuthenticateLdapUser(
+		const entry = await this.authenticateRemoteUser(
 			loginId,
 			password,
-			loginIdAttribute,
-			userFilter,
+			this.config.loginIdAttribute,
+			this.config.userFilter,
 		);
+		if (!entry) return undefined;
 
-		if (!ldapUser) return undefined;
+		const uid = entry[this.config.ldapIdAttribute] as string;
+		const attrs = {
+			email: entry[this.config.emailAttribute] as string,
+			firstName: entry[this.config.firstNameAttribute] as string,
+			lastName: entry[this.config.lastNameAttribute] as string,
+		};
 
-		const [ldapId, ldapAttributesValues] = mapLdapAttributesToUser(ldapUser, this.config);
+		if (!uid || !attrs.email) return undefined;
 
-		const { email: emailAttributeValue } = ldapAttributesValues;
+		const existing = await this.findIdentity(uid);
 
-		if (!ldapId || !emailAttributeValue) return undefined;
-
-		const ldapAuthIdentity = await getAuthIdentityByLdapId(ldapId);
-		if (!ldapAuthIdentity) {
-			if (this.config.enforceEmailUniqueness) {
-				const hasDuplicates = await this.hasEmailDuplicatesInLdap(emailAttributeValue);
-
-				if (hasDuplicates) {
-					this.logger.warn('LDAP login blocked: Multiple LDAP accounts share the same email', {
-						email: emailAttributeValue,
-						ldapId,
-					});
-
-					return undefined;
-				}
+		if (!existing) {
+			if (this.config.enforceEmailUniqueness && (await this.emailHasDuplicates(attrs.email))) {
+				this.logger.warn('LDAP login refused – duplicate email across LDAP entries', { email: attrs.email, uid });
+				return undefined;
 			}
 
-			const emailUser = await getUserByEmail(emailAttributeValue);
+			const localUser = await this.findUserByEmail(attrs.email);
 
-			// check if there is an email user with the same email as the authenticated LDAP user trying to log-in
-			if (emailUser && emailUser.email === emailAttributeValue) {
-				const identity = await createLdapAuthIdentity(emailUser, ldapId);
-				await updateLdapUserOnLocalDb(identity, ldapAttributesValues);
+			if (localUser?.email === attrs.email) {
+				const ident = await this.linkIdentity(localUser, uid);
+				await this.refreshLocalUser(ident, attrs);
 			} else {
-				const user = await createLdapUserOnLocalDb(ldapAttributesValues, ldapId);
+				const created = await this.provisionUser(attrs, uid);
 				Container.get(EventService).emit('user-signed-up', {
-					user,
+					user: created,
 					userType: 'ldap',
 					wasDisabledLdapUser: false,
 				});
-				return user;
+				return created;
 			}
-		} else {
-			if (ldapAuthIdentity.user) {
-				if (ldapAuthIdentity.user.disabled) return undefined;
-				await updateLdapUserOnLocalDb(ldapAuthIdentity, ldapAttributesValues);
-			}
+		} else if (existing.user) {
+			if (existing.user.disabled) return undefined;
+			await this.refreshLocalUser(existing, attrs);
 		}
 
-		// Retrieve the user again as user's data might have been updated
-		return (await getUserByLdapId(ldapId)) ?? undefined;
+		return (await this.findUserByLdapUid(uid)) ?? undefined;
+	}
+
+	private async authenticateRemoteUser(
+		loginId: string,
+		password: string,
+		attr: string,
+		filter: string,
+	): Promise<LdapUser | undefined> {
+		let results: LdapUser[] = [];
+		try {
+			results = await this.queryDirectory(
+				this.buildFilter(`(${attr}=${this.escapeFilterValue(loginId)})`, filter),
+			);
+		} catch (e) {
+			if (e instanceof Error) {
+				this.events.emit('ldap-login-sync-failed', { error: e.message });
+				this.logger.error('LDAP search error', { message: e.message });
+			}
+			return undefined;
+		}
+
+		if (!results.length) return undefined;
+
+		const candidate = results.pop() ?? { dn: '' };
+		try {
+			await this.verifyCredentials(candidate.dn, password);
+		} catch (e) {
+			if (e instanceof Error) {
+				this.logger.error('LDAP credential verification failed', { message: e.message });
+			}
+			return undefined;
+		}
+
+		this.normalizeBinaryFields(candidate);
+		return candidate;
+	}
+
+	private async emailHasDuplicates(email: string): Promise<boolean> {
+		try {
+			const hits = await this.queryDirectory(
+				this.buildFilter(
+					`(${this.config.emailAttribute}=${this.escapeFilterValue(email)})`,
+					this.config.userFilter,
+				),
+			);
+			return hits.length > 1;
+		} catch (err) {
+			this.logger.error('LDAP duplicate-email check failed', {
+				email,
+				error: err instanceof Error ? err.message : 'unknown',
+			});
+			return true; // fail-closed
+		}
+	}
+
+	// ── Synchronisation ────────────────────────────────────────
+
+	async runSync(mode: RunningMode): Promise<void> {
+		this.logger.debug(`LDAP sync starting (${mode})`);
+
+		let remoteUsers: LdapUser[] = [];
+		try {
+			remoteUsers = await this.queryDirectory(
+				this.buildFilter(`(${this.config.loginIdAttribute}=*)`, this.config.userFilter),
+			);
+			remoteUsers.forEach((u) => this.normalizeBinaryFields(u));
+		} catch (e) {
+			if (e instanceof Error) { this.logger.error(`LDAP sync query failed: ${e.message}`); throw e; }
+		}
+
+		const started = new Date();
+		const knownIds = await this.allLocalLdapIds();
+
+		const toCreate = this.diffNewUsers(remoteUsers, knownIds);
+		const toUpdate = this.diffExistingUsers(remoteUsers, knownIds);
+		const toDisable = this.diffRemovedUsers(remoteUsers, knownIds);
+
+		const validCreates = toCreate.filter(([id, u]) => {
+			if (!isValidEmail(u.email)) { this.logger.warn(`LDAP sync: invalid email for ${id}`); return false; }
+			return true;
+		});
+		const validUpdates = toUpdate.filter(([id, u]) => {
+			if (!isValidEmail(u.email)) { this.logger.warn(`LDAP sync: invalid email for ${id}`); return false; }
+			return true;
+		});
+
+		this.logger.debug('LDAP sync diff', {
+			create: validCreates.length,
+			update: validUpdates.length,
+			disable: toDisable.length,
+		});
+
+		const finished = new Date();
+		let status: SyncStatus = 'success';
+		let errMsg = '';
+
+		try {
+			if (mode === 'live') await this.applySyncChanges(validCreates, validUpdates, toDisable);
+		} catch (e) {
+			if (e instanceof QueryFailedError) { status = 'error'; errMsg = e.message; }
+		}
+
+		await this.recordSyncRun({
+			startedAt: started, endedAt: finished,
+			created: validCreates.length, updated: validUpdates.length,
+			disabled: toDisable.length, scanned: remoteUsers.length,
+			runMode: mode, status, error: errMsg,
+		});
+
+		this.events.emit('ldap-general-sync-finished', {
+			type: !this.periodicSync ? 'scheduled' : `manual_${mode}`,
+			succeeded: true,
+			usersSynced: validCreates.length + validUpdates.length + toDisable.length,
+			error: errMsg,
+		});
+	}
+
+	private startPeriodicSync() {
+		if (!this.config.synchronizationInterval) throw new UnexpectedError('Sync interval required');
+		this.periodicSync = setInterval(
+			async () => await this.runSync('live'),
+			this.config.synchronizationInterval * 60_000,
+		);
+	}
+
+	private cancelPeriodicSync() {
+		clearInterval(this.periodicSync);
+		this.periodicSync = undefined;
+	}
+
+	// ── Internal config management ─────────────────────────────
+
+	private applyConfig(cfg: LdapConfig) {
+		this.config = cfg;
+		this.connection = undefined;
+
+		if (this.periodicSync && !cfg.synchronizationEnabled) {
+			this.cancelPeriodicSync();
+		} else if (!this.periodicSync && cfg.synchronizationEnabled) {
+			this.startPeriodicSync();
+		} else if (this.periodicSync && cfg.synchronizationEnabled) {
+			this.cancelPeriodicSync();
+			this.startPeriodicSync();
+		}
+	}
+
+	private async applyGlobalSettings(cfg: LdapConfig) {
+		const current = currentAuthMethod();
+
+		if (cfg.loginEnabled && !isEmailAuth() && !isLdapAuth()) {
+			throw new InternalServerError(
+				`Cannot enable LDAP while auth method "${current}" is active`,
+			);
+		}
+
+		Container.get(GlobalConfig).sso.ldap.loginEnabled = cfg.loginEnabled;
+		Container.get(GlobalConfig).sso.ldap.loginLabel = cfg.loginLabel;
+
+		const target = !cfg.loginEnabled && current === 'ldap' ? 'email' : current;
+		await setCurrentAuthMethod(cfg.loginEnabled ? 'ldap' : target);
+	}
+
+	// ── LDAP filter helpers ────────────────────────────────────
+
+	private buildFilter(condition: string, userFilter: string): string {
+		if (userFilter) return `(&${userFilter}${condition}`;
+		return `(&(|(objectClass=person)(objectClass=user))${condition})`;
+	}
+
+	private escapeFilterValue(raw: string): string {
+		// @ts-ignore – ldapts Filter.escape is a static utility
+		return new Filter().escape(raw);
+	}
+
+	private normalizeBinaryFields(entry: LdapUser) {
+		for (const attr of BINARY_AD_ATTRIBUTES) {
+			if (entry[attr] instanceof Buffer) {
+				entry[attr] = (entry[attr] as Buffer).toString('hex');
+			}
+		}
+	}
+
+	// ── Schema validation ──────────────────────────────────────
+
+	private validateSchema(cfg: LdapConfig): { ok: boolean; detail: string } {
+		const { valid, errors } = validate(cfg, LDAP_CONFIG_SCHEMA, { nestedErrors: true });
+		if (valid) return { ok: true, detail: '' };
+		return {
+			ok: false,
+			detail: errors.map((e) => `request.body.${e.path[0]} ${e.message}`).join(','),
+		};
+	}
+
+	// ── User diff logic ────────────────────────────────────────
+
+	private mapToLocal(entry: LdapUser, forCreation = false): [string, User] {
+		const uid = entry[this.config.ldapIdAttribute] as string;
+		const u = new User();
+		u.email = entry[this.config.emailAttribute] as string;
+		u.firstName = entry[this.config.firstNameAttribute] as string;
+		u.lastName = entry[this.config.lastNameAttribute] as string;
+		if (forCreation) {
+			u.role = GLOBAL_MEMBER_ROLE;
+			u.password = randomString(8);
+			u.disabled = false;
+		} else {
+			u.disabled = true;
+		}
+		return [uid, u];
+	}
+
+	private diffNewUsers(remote: LdapUser[], localIds: string[]): Array<[string, User]> {
+		return remote
+			.filter((r) => !localIds.includes(r[this.config.ldapIdAttribute] as string))
+			.map((r) => this.mapToLocal(r, true));
+	}
+
+	private diffExistingUsers(remote: LdapUser[], localIds: string[]): Array<[string, User]> {
+		return remote
+			.filter((r) => localIds.includes(r[this.config.ldapIdAttribute] as string))
+			.map((r) => this.mapToLocal(r));
+	}
+
+	private diffRemovedUsers(remote: LdapUser[], localIds: string[]): string[] {
+		const remoteIds = remote.map((r) => r[this.config.ldapIdAttribute]);
+		return localIds.filter((id) => !remoteIds.includes(id));
+	}
+
+	// ── Database operations ────────────────────────────────────
+
+	private async findIdentity(uid: string) {
+		return await Container.get(AuthIdentityRepository).findOne({
+			relations: { user: true },
+			where: { providerId: uid, providerType: 'ldap' },
+		});
+	}
+
+	private async findUserByLdapUid(uid: string) {
+		return await Container.get(UserRepository).findOne({
+			relations: { role: true },
+			where: { authIdentities: { providerId: uid, providerType: 'ldap' } },
+		});
+	}
+
+	private async findUserByEmail(email: string) {
+		return await Container.get(UserRepository).findOne({ where: { email } });
+	}
+
+	private async allLocalLdapIds(): Promise<string[]> {
+		const rows = await Container.get(AuthIdentityRepository).find({
+			select: ['providerId'],
+			where: { providerType: 'ldap' },
+		});
+		return rows.map((r) => r.providerId);
+	}
+
+	private async findManagedUsers(): Promise<User[]> {
+		const rows = await Container.get(AuthIdentityRepository).find({
+			relations: { user: true },
+			where: { providerType: 'ldap' },
+		});
+		return rows.map((r) => r.user);
+	}
+
+	private async linkIdentity(user: User, uid: string) {
+		return await Container.get(AuthIdentityRepository).save(
+			AuthIdentity.create(user, uid),
+			{ transaction: false },
+		);
+	}
+
+	private async provisionUser(data: Partial<User>, uid: string) {
+		const { user } = await Container.get(UserRepository).createUserWithProject({
+			password: randomString(8),
+			role: GLOBAL_MEMBER_ROLE,
+			...data,
+		});
+		await this.linkIdentity(user, uid);
+		return user;
+	}
+
+	private async refreshLocalUser(identity: AuthIdentity, data: Partial<User>) {
+		const userId = identity?.user?.id;
+		if (!userId) return;
+		const user = await Container.get(UserRepository).findOneBy({ id: userId });
+		if (user) {
+			await Container.get(UserRepository).save({ id: userId, ...data }, { transaction: true });
+		}
+	}
+
+	private async purgeAllIdentities() {
+		return await Container.get(AuthIdentityRepository).delete({ providerType: 'ldap' });
+	}
+
+	private async recordSyncRun(data: Omit<AuthProviderSyncHistory, 'id' | 'providerType'>) {
+		await Container.get(AuthProviderSyncHistoryRepository).save(
+			{ ...data, providerType: 'ldap' },
+			{ transaction: false },
+		);
+	}
+
+	private async applySyncChanges(
+		creates: Array<[string, User]>,
+		updates: Array<[string, User]>,
+		disables: string[],
+	) {
+		const userRepo = Container.get(UserRepository);
+		await userRepo.manager.transaction(async (tx) => {
+			await Promise.all([
+				...creates.map(async ([uid, u]) => {
+					const { user: saved } = await userRepo.createUserWithProject(u, tx);
+					return await tx.save(AuthIdentity.create(saved, uid));
+				}),
+				...updates.map(async ([uid, u]) => {
+					const ident = await tx.findOneBy(AuthIdentity, { providerId: uid });
+					if (!ident?.userId) return;
+					const cur = await tx.findOneBy(User, { id: ident.userId });
+					if (cur && (cur.email !== u.email || cur.firstName !== u.firstName || cur.lastName !== u.lastName)) {
+						Object.assign(cur, { email: u.email, firstName: u.firstName, lastName: u.lastName });
+						await tx.save(User, cur);
+					}
+				}),
+				...disables.map(async (uid) => {
+					const ident = await tx.findOneBy(AuthIdentity, { providerId: uid });
+					if (!ident?.userId) return;
+					const u = await tx.findOneBy(User, { id: ident.userId });
+					if (u) { u.disabled = true; await tx.save(u); }
+					await tx.delete(AuthIdentity, { userId: ident.userId });
+				}),
+			]);
+		});
+	}
+
+	// ── Public query for controller ────────────────────────────
+
+	async getSyncHistory(page: number, perPage: number): Promise<AuthProviderSyncHistory[]> {
+		return await Container.get(AuthProviderSyncHistoryRepository).find({
+			where: { providerType: 'ldap' },
+			order: { id: 'DESC' },
+			take: perPage,
+			skip: Math.abs(page) * perPage,
+		});
 	}
 }
