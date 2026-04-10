@@ -325,7 +325,7 @@ export class FrontendService {
 				provisioning: false,
 				projects: {
 					team: {
-						limit: 0,
+						limit: -1,
 					},
 				},
 				customRoles: false,
@@ -455,7 +455,7 @@ export class FrontendService {
 
 		// refresh enterprise status
 		Object.assign(this.settings.enterprise, {
-			sharing: this.license.isSharingEnabled(),
+			sharing: true,
 			logStreaming: this.license.isLogStreamingEnabled(),
 			ldap: true,
 			saml: this.license.isSamlEnabled(),
@@ -547,7 +547,7 @@ export class FrontendService {
 
 		this.settings.binaryDataMode = this.binaryDataConfig.mode;
 
-		this.settings.enterprise.projects.team.limit = this.license.getTeamProjectLimit();
+		this.settings.enterprise.projects.team.limit = -1;
 
 		this.settings.folders.enabled = this.license.isFoldersEnabled();
 
