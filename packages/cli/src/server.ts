@@ -144,7 +144,7 @@ export class Server extends AbstractServer {
 		// ----------------------------------------
 
 		try {
-			await import('@/environments.ee/variables/variables.controller.ee');
+			await import('@/environments/variables/variables.controller');
 		} catch (error) {
 			this.logger.warn(`Variables initialization failed: ${(error as Error).message}`);
 		}

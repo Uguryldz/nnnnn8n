@@ -3,8 +3,8 @@ import type { AuthenticatedRequest } from '@n8n/db';
 import { Container } from '@n8n/di';
 import type { Response } from 'express';
 
-import { VariablesController } from '@/environments.ee/variables/variables.controller.ee';
-import { VariablesService } from '@/environments.ee/variables/variables.service.ee';
+import { VariablesController } from '@/environments/variables/variables.controller';
+import { VariablesService } from '@/environments/variables/variables.service';
 import type { VariablesRequest } from '@/requests';
 
 import {
