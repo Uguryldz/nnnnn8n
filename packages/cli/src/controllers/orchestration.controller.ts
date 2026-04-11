@@ -18,8 +18,6 @@ export class OrchestrationController {
 	@GlobalScope('orchestration:read')
 	@Post('/worker/status')
 	async getWorkersStatusAll(req: AuthenticatedRequest) {
-		if (!this.licenseService.isWorkerViewLicensed()) return;
-
 		return await this.workerStatusService.requestWorkerStatus(req.user.id);
 	}
 }

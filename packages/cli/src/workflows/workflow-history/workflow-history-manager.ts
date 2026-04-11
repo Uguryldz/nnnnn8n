@@ -39,7 +39,7 @@ export class WorkflowHistoryManager {
 		}
 		const pruneDateTime = DateTime.now().minus({ hours: pruneHours }).toJSDate();
 
-		const preserveNamedVersions = this.license.isLicensed('feat:namedVersions');
+		const preserveNamedVersions = true;
 		await this.workflowHistoryRepo.deleteEarlierThanExceptCurrentAndActive(
 			pruneDateTime,
 			preserveNamedVersions,

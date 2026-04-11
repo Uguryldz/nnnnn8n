@@ -1,6 +1,6 @@
 import { UpdateSecuritySettingsDto } from '@n8n/api-types';
 import { type AuthenticatedRequest } from '@n8n/db';
-import { Body, Get, GlobalScope, Licensed, Post, RestController } from '@n8n/decorators';
+import { Body, Get, GlobalScope, Post, RestController } from '@n8n/decorators';
 import {
 	PERSONAL_SPACE_PUBLISHING_SETTING,
 	PERSONAL_SPACE_SHARING_SETTING,
@@ -17,7 +17,6 @@ export class SecuritySettingsController {
 		private readonly eventService: EventService,
 	) {}
 
-	@Licensed('feat:personalSpacePolicy')
 	@GlobalScope('securitySettings:manage')
 	@Get('/')
 	async getSecuritySettings(_req: AuthenticatedRequest, _res: Response) {
@@ -40,7 +39,6 @@ export class SecuritySettingsController {
 		};
 	}
 
-	@Licensed('feat:personalSpacePolicy')
 	@GlobalScope('securitySettings:manage')
 	@Post('/')
 	async updateSecuritySettings(

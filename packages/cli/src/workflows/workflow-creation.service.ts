@@ -152,14 +152,6 @@ export class WorkflowCreationService {
 				throw new BadRequestError(message);
 			}
 
-			// Strip redactionPolicy if instance lacks data-redaction license
-			if (
-				newWorkflow.settings?.redactionPolicy !== undefined &&
-				!this.licenseState.isDataRedactionLicensed()
-			) {
-				delete newWorkflow.settings.redactionPolicy;
-			}
-
 			// Strip redactionPolicy if user lacks scope (projectId is already resolved here)
 			if (newWorkflow.settings?.redactionPolicy !== undefined) {
 				const canUpdateRedaction = await userHasScopes(

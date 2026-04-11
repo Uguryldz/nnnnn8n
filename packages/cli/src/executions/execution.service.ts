@@ -372,9 +372,7 @@ export class ExecutionService {
 			}
 		}
 
-		if (requestFilters?.metadata && !this.license.isAdvancedExecutionFiltersEnabled()) {
-			delete requestFilters.metadata;
-		}
+		// advancedExecutionFilters always enabled
 
 		await this.executionPersistence.hardDeleteBy({
 			filters: requestFilters,

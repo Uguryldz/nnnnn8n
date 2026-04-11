@@ -254,7 +254,7 @@ export class ExecutionRedactionService implements ExecutionRedaction {
 	 * user-configured policies are not applied without the license.
 	 */
 	private resolvePolicy(execution: RedactableExecution): WorkflowSettings.RedactionPolicy {
-		if (!this.licenseState.isDataRedactionLicensed()) return 'none';
+		// dataRedaction always enabled
 
 		return (
 			execution.data.executionData?.runtimeData?.redaction?.policy ??

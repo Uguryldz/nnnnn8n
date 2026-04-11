@@ -462,21 +462,21 @@ export class FrontendService {
 			oidc: this.licenseState.isOidcLicensed(),
 			mfaEnforcement: this.licenseState.isMFAEnforcementLicensed(),
 			provisioning: false, // temporarily disabled until this feature is ready for release
-			advancedExecutionFilters: this.license.isAdvancedExecutionFiltersEnabled(),
+			advancedExecutionFilters: true,
 			variables: true,
 			sourceControl: true,
 			externalSecrets: this.license.isExternalSecretsEnabled(),
 			showNonProdBanner: this.license.isLicensed(LICENSE_FEATURES.SHOW_NON_PROD_BANNER),
-			debugInEditor: this.license.isDebugInEditorLicensed(),
-			binaryDataS3: isS3Available && isS3Selected && isS3Licensed,
-			workerView: this.license.isWorkerViewLicensed(),
+			debugInEditor: true,
+			binaryDataS3: isS3Available && isS3Selected,
+			workerView: true,
 			advancedPermissions: true,
 
-			workflowDiffs: this.licenseState.isWorkflowDiffsLicensed(),
-			namedVersions: this.license.isLicensed(LICENSE_FEATURES.NAMED_VERSIONS),
+			workflowDiffs: true,
+			namedVersions: true,
 			customRoles: true,
-			personalSpacePolicy: this.licenseState.isPersonalSpacePolicyLicensed(),
-			dataRedaction: this.licenseState.isDataRedactionLicensed(),
+			personalSpacePolicy: true,
+			dataRedaction: true,
 		});
 
 		if (this.license.isLdapEnabled()) {
@@ -549,7 +549,7 @@ export class FrontendService {
 
 		this.settings.enterprise.projects.team.limit = -1;
 
-		this.settings.folders.enabled = this.license.isFoldersEnabled();
+		this.settings.folders.enabled = true;
 
 		// Refresh evaluation settings
 		this.settings.evaluation.quota = this.licenseState.getMaxWorkflowsWithEvaluations();

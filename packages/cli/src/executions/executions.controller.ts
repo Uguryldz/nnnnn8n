@@ -54,10 +54,7 @@ export class ExecutionsController {
 			};
 		}
 
-		if (!this.license.isAdvancedExecutionFiltersEnabled()) {
-			delete query.metadata;
-			delete query.annotationTags;
-		}
+		// advancedExecutionFilters always enabled
 
 		const noStatus = !query.status || query.status.length === 0;
 		const noRange = !query.range.lastId || !query.range.firstId;
