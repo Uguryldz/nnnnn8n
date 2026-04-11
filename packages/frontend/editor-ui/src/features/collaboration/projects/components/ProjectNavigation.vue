@@ -155,13 +155,7 @@ onBeforeUnmount(() => {
 				:active="activeTabId === 'instance-ai'"
 				data-test-id="project-instance-ai-menu-item"
 			/>
-			<N8nMenuItem
-				v-if="isChatLinkAvailable"
-				:item="chat"
-				:compact="props.collapsed"
-				:active="activeTabId === 'chat'"
-				data-test-id="project-chat-menu-item"
-			/>
+			<!-- chat hidden -->
 		</div>
 		<N8nText
 			v-if="

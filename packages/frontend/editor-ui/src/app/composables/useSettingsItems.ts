@@ -22,14 +22,6 @@ export function useSettingsItems() {
 	const settingsItems = computed<IMenuItem[]>(() => {
 		const menuItems: IMenuItem[] = [
 			{
-				id: 'settings-usage-and-plan',
-				icon: 'chart-column-decreasing',
-				label: i18n.baseText('settings.usageAndPlan.title'),
-				position: 'top',
-				available: canUserAccessRouteByName(VIEWS.USAGE),
-				route: { to: { name: VIEWS.USAGE } },
-			},
-			{
 				id: 'settings-personal',
 				icon: 'circle-user-round',
 				label: i18n.baseText('settings.personal'),
@@ -82,14 +74,7 @@ export function useSettingsItems() {
 				available: settingsStore.isPublicApiEnabled && canUserAccessRouteByName(VIEWS.API_SETTINGS),
 				route: { to: { name: VIEWS.API_SETTINGS } },
 			},
-			{
-				id: 'settings-external-secrets',
-				icon: 'vault',
-				label: i18n.baseText('settings.externalSecrets.title'),
-				position: 'top',
-				available: canUserAccessRouteByName(VIEWS.EXTERNAL_SECRETS_SETTINGS),
-				route: { to: { name: VIEWS.EXTERNAL_SECRETS_SETTINGS } },
-			},
+			// external-secrets hidden
 			{
 				id: 'settings-credential-resolvers',
 				icon: 'key-round',
@@ -106,14 +91,7 @@ export function useSettingsItems() {
 				available: canUserAccessRouteByName(VIEWS.SOURCE_CONTROL),
 				route: { to: { name: VIEWS.SOURCE_CONTROL } },
 			},
-			{
-				id: 'settings-sso',
-				icon: 'user-lock',
-				label: i18n.baseText('settings.sso'),
-				position: 'top',
-				available: canUserAccessRouteByName(VIEWS.SSO_SETTINGS),
-				route: { to: { name: VIEWS.SSO_SETTINGS } },
-			},
+			// sso hidden
 			{
 				id: 'settings-security',
 				icon: 'shield',
@@ -142,14 +120,7 @@ export function useSettingsItems() {
 			},
 		];
 
-		menuItems.push({
-			id: 'settings-log-streaming',
-			icon: 'log-in',
-			label: i18n.baseText('settings.log-streaming'),
-			position: 'top',
-			available: canUserAccessRouteByName(VIEWS.LOG_STREAMING_SETTINGS),
-			route: { to: { name: VIEWS.LOG_STREAMING_SETTINGS } },
-		});
+		// log-streaming hidden
 
 		menuItems.push({
 			id: 'settings-community-nodes',
@@ -171,8 +142,11 @@ export function useSettingsItems() {
 			});
 		}
 
-		// Append module-registered settings sidebar items.
-		const moduleItems = uiStore.settingsSidebarItems;
+		// Append module-registered settings sidebar items (excluding hidden modules).
+		const hiddenModuleIds = new Set(['settings-chat', 'settings-chat-hub', 'chat-hub', 'chat']);
+		const moduleItems = uiStore.settingsSidebarItems.filter(
+			(item) => !hiddenModuleIds.has(item.id) && !item.id.includes('chat'),
+		);
 
 		return menuItems.concat(moduleItems.filter((item) => !menuItems.some((m) => m.id === item.id)));
 	});

@@ -79,7 +79,7 @@ export class ExecutionsConfig {
 
 	/** Whether to delete past executions on a rolling basis. */
 	@Env('EXECUTIONS_DATA_PRUNE')
-	pruneData: boolean = true;
+	pruneData: boolean = false;
 
 	/** How old (hours) a finished execution must be to qualify for soft-deletion. */
 	@Env('EXECUTIONS_DATA_MAX_AGE')
