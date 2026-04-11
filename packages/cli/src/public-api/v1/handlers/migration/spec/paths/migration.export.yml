@@ -1,0 +1,35 @@
+get:
+  x-eov-operation-id: exportMigration
+  x-eov-operation-handler: v1/handlers/migration/migration.handler
+  tags:
+    - Migration
+  summary: Export project migration bundle
+  description: |
+    Exports a complete migration bundle for the given workflow and all its dependencies.
+    The bundle includes the workflow, all referenced subworkflows (Execute Workflow nodes),
+    all credentials used by those workflows (encrypted), and all referenced data tables
+    with their rows. Each item includes path information (project/folder) so it can be
+    re-created in the same structure on import.
+    Returns a single JSON object suitable for import into another n8n instance.
+  operationId: export-migration
+  parameters:
+    - name: workflowId
+      in: query
+      required: true
+      description: The ID of the root workflow to export. Subworkflows, credentials, and data tables referenced by this workflow are included.
+      schema:
+        type: string
+        example: 'abc12345-1234-1234-1234-123456789012'
+  responses:
+    '200':
+      description: Migration bundle (workflows, credentials, data tables) as JSON.
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/migration-bundle.yml'
+    '400':
+      $ref: '../../../../shared/spec/responses/badRequest.yml'
+    '401':
+      $ref: '../../../../shared/spec/responses/unauthorized.yml'
+    '404':
+      $ref: '../../../../shared/spec/responses/notFound.yml'

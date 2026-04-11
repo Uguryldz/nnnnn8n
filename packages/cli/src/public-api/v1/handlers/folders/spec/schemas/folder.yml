@@ -1,0 +1,21 @@
+type: object
+description: Folder entity
+additionalProperties: false
+properties:
+  id:
+    type: string
+    readOnly: true
+  name:
+    type: string
+  parentFolderId:
+    type: string
+    nullable: true
+    readOnly: true
+  createdAt:
+    type: string
+    format: date-time
+    readOnly: true
+  updatedAt:
+    type: string
+    format: date-time
+    readOnly: true

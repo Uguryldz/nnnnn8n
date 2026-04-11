@@ -1,0 +1,33 @@
+post:
+  x-eov-operation-id: importDataTable
+  x-eov-operation-handler: v1/handlers/migration/migration.handler
+  tags:
+    - Migration
+  summary: Import data table
+  description: |
+    Imports a data table export bundle. If a table with the same name exists in the target project, it is matched (no rows added). Otherwise a new table is created with all rows.
+    Optional targetProjectId forces the table into that project; when omitted, project is resolved by name from the export.
+  operationId: import-data-table
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          allOf:
+            - $ref: '../schemas/data-table-export-bundle.yml'
+            - type: object
+              properties:
+                targetProjectId:
+                  type: string
+                  description: Optional. If set, the table is created/matched in this project.
+  responses:
+    '200':
+      description: Import result (created, dataTableId, rowsInserted).
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/data-table-import-result.yml'
+    '400':
+      $ref: '../../../../shared/spec/responses/badRequest.yml'
+    '401':
+      $ref: '../../../../shared/spec/responses/unauthorized.yml'

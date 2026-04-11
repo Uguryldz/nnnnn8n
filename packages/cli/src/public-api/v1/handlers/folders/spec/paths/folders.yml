@@ -1,0 +1,34 @@
+post:
+  x-eov-operation-id: createFolder
+  x-eov-operation-handler: v1/handlers/folders/folders.handler
+  tags:
+    - Folders
+  summary: Create a folder
+  description: |
+    Create a folder in a project.
+
+    - **projectId** (required): The project where the folder is created.
+    - **folderId** (optional): If provided, the folder is created inside this folder (must belong to the given project). If omitted, the folder is created at project root.
+    - **name** (required): Folder name.
+  requestBody:
+    description: Folder creation payload.
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/createFolderRequest.yml'
+    required: true
+  responses:
+    '201':
+      description: Folder created
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/folder.yml'
+    '400':
+      $ref: '../../../../shared/spec/responses/badRequest.yml'
+    '401':
+      $ref: '../../../../shared/spec/responses/unauthorized.yml'
+    '403':
+      $ref: '../../../../shared/spec/responses/forbidden.yml'
+    '404':
+      $ref: '../../../../shared/spec/responses/notFound.yml'

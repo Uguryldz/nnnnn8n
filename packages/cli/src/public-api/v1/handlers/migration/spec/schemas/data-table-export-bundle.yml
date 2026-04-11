@@ -1,0 +1,15 @@
+type: object
+description: Single data table export (columns + rows + path)
+required:
+  - version
+  - exportedAt
+  - table
+properties:
+  version:
+    type: string
+    enum: ['1.0']
+  exportedAt:
+    type: string
+    format: date-time
+  table:
+    $ref: './migration-datatable-item.yml'

@@ -1,0 +1,17 @@
+type: object
+description: Instance or project variable ($vars.xxx)
+properties:
+  id:
+    type: string
+  key:
+    type: string
+  type:
+    type: string
+  value:
+    type: string
+  projectId:
+    type: string
+    nullable: true
+  projectName:
+    type: string
+    nullable: true

@@ -116,4 +116,19 @@ export class SCGitService {
 		const pushResult = await g.push('origin');
 		return { statusCode: 200, pushed: true, pushResult };
 	}
+
+	async pushMigrationFile(name: string, email: string, relativePath: string, content: string) {
+		const g = await this.ensureGit();
+		const fs = await import('node:fs/promises');
+		const path = await import('node:path');
+
+		const fullPath = path.join(this.repoDir, relativePath);
+		await fs.mkdir(path.dirname(fullPath), { recursive: true });
+		await fs.writeFile(fullPath, content, 'utf8');
+
+		await g.add(relativePath);
+		await this.setUserIdentity(name, email);
+		await g.commit(`migration: ${relativePath}`);
+		return await g.push('origin');
+	}
 }

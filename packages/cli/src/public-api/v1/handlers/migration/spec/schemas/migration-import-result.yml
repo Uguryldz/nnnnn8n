@@ -1,0 +1,44 @@
+type: object
+description: Result of importing a migration bundle (name-based create/update counts)
+required:
+  - workflowsCreated
+  - workflowsUpdated
+  - credentialsCreated
+  - credentialsUpdated
+  - dataTablesCreated
+  - dataTablesUpdated
+  - variablesCreated
+  - variablesUpdated
+  - tagsCreated
+  - sourceWorkflowId
+properties:
+  workflowsCreated:
+    type: integer
+    minimum: 0
+  workflowsUpdated:
+    type: integer
+    minimum: 0
+  credentialsCreated:
+    type: integer
+    minimum: 0
+  credentialsUpdated:
+    type: integer
+    minimum: 0
+  dataTablesCreated:
+    type: integer
+    minimum: 0
+  dataTablesUpdated:
+    type: integer
+    minimum: 0
+  variablesCreated:
+    type: integer
+    minimum: 0
+  variablesUpdated:
+    type: integer
+    minimum: 0
+  tagsCreated:
+    type: integer
+    minimum: 0
+  sourceWorkflowId:
+    type: string
+    description: The new ID of the root workflow that was imported

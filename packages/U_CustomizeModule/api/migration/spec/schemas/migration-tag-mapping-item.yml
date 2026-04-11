@@ -1,0 +1,7 @@
+type: object
+description: Workflow to tag mapping
+properties:
+  workflowId:
+    type: string
+  tagId:
+    type: string

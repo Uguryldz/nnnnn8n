@@ -1,0 +1,30 @@
+get:
+  x-eov-operation-id: exportDataTable
+  x-eov-operation-handler: v1/handlers/migration/migration.handler
+  tags:
+    - Migration
+  summary: Export data table
+  description: |
+    Exports a single data table with all its columns and rows as a JSON bundle.
+    Requires dataTable:read on the table's project.
+  operationId: export-data-table
+  parameters:
+    - name: dataTableId
+      in: query
+      required: true
+      description: The ID of the data table to export.
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Data table export bundle (table metadata, columns, rows).
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/data-table-export-bundle.yml'
+    '400':
+      $ref: '../../../../shared/spec/responses/badRequest.yml'
+    '401':
+      $ref: '../../../../shared/spec/responses/unauthorized.yml'
+    '404':
+      $ref: '../../../../shared/spec/responses/notFound.yml'

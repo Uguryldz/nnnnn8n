@@ -1,0 +1,15 @@
+type: object
+description: Create folder request (project root or under a folder)
+required:
+  - projectId
+  - name
+properties:
+  projectId:
+    type: string
+    description: Project where the folder will be created (required).
+  folderId:
+    type: string
+    description: If provided, the folder is created inside this folder. If omitted, created at project root.
+  name:
+    type: string
+    description: Folder name.

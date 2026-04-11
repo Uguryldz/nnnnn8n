@@ -14,6 +14,8 @@ import type { DataTable } from '@/features/core/dataTable/dataTable.types';
 import type { IUser, UserAction } from '@n8n/design-system';
 import { useI18n } from '@n8n/i18n';
 import { computed } from 'vue';
+import { publishDataTableToAzure } from '@n8n/rest-api-client/api/migration';
+import { useRootStore } from '@n8n/stores/useRootStore';
 
 import { N8nActionToggle } from '@n8n/design-system';
 import { useUIStore } from '@/app/stores/ui.store';
@@ -42,6 +44,7 @@ const emit = defineEmits<{
 
 const dataTableStore = useDataTableStore();
 const uiStore = useUIStore();
+const rootStore = useRootStore();
 
 const i18n = useI18n();
 const message = useMessage();
@@ -69,6 +72,11 @@ const actions = computed<Array<UserAction<IUser>>>(() => {
 			disabled: !dataTableStore.projectPermissions.dataTable.delete || props.isReadOnly,
 		},
 	];
+	availableActions.push({
+		label: i18n.baseText('menuActions.pushToAzure'),
+		value: 'push-to-azure',
+		disabled: props.isReadOnly,
+	});
 	if (props.location === 'breadcrumbs') {
 		availableActions.unshift({
 			label: i18n.baseText('generic.rename'),
@@ -96,6 +104,22 @@ const onAction = async (action: string) => {
 		}
 		case DATA_TABLE_CARD_ACTIONS.DOWNLOAD_CSV: {
 			uiStore.openModal(downloadModalKey.value);
+			break;
+		}
+		case 'push-to-azure': {
+			try {
+				const result = await publishDataTableToAzure(
+					rootStore.restApiContext,
+					props.dataTable.id,
+				);
+				toast.showMessage({
+					title: i18n.baseText('menuActions.pushToAzure'),
+					message: `${i18n.baseText('menuActions.pushToAzure.success')} ${result.blobName}`,
+					type: 'success',
+				});
+			} catch (error) {
+				toast.showError(error, 'Error');
+			}
 			break;
 		}
 		case DATA_TABLE_CARD_ACTIONS.DELETE: {

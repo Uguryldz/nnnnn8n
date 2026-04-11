@@ -1,0 +1,45 @@
+type: object
+description: Full migration bundle for a workflow and its dependencies (pin data excluded)
+required:
+  - version
+  - exportedAt
+  - sourceWorkflowId
+  - workflows
+  - credentials
+  - dataTables
+  - variables
+  - tags
+  - tagMappings
+properties:
+  version:
+    type: string
+    enum: ['1.0']
+  exportedAt:
+    type: string
+    format: date-time
+  sourceWorkflowId:
+    type: string
+  workflows:
+    type: array
+    items:
+      $ref: './migration-workflow-item.yml'
+  credentials:
+    type: array
+    items:
+      $ref: './migration-credential-item.yml'
+  dataTables:
+    type: array
+    items:
+      $ref: './migration-datatable-item.yml'
+  variables:
+    type: array
+    items:
+      $ref: './migration-variable-item.yml'
+  tags:
+    type: array
+    items:
+      $ref: './migration-tag-item.yml'
+  tagMappings:
+    type: array
+    items:
+      $ref: './migration-tag-mapping-item.yml'

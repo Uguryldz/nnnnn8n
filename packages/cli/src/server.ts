@@ -63,6 +63,7 @@ import '@/workflows/workflow-history/workflow-history.controller';
 import '@/workflows/workflows.controller';
 import '@/modules/workflow-index/workflow-dependency.controller';
 import '@/webhooks/webhooks.controller';
+import '@/controllers/migration-publish-azure.controller';
 
 import { ChatServer } from './chat/chat-server';
 import { MfaService } from './mfa/mfa.service';

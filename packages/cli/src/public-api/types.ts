@@ -210,6 +210,32 @@ export declare namespace InsightsRequest {
 	>;
 }
 
+export declare namespace MigrationRequest {
+	type Export = AuthenticatedRequest<{}, {}, {}, { workflowId?: string }>;
+	type Import = AuthenticatedRequest<
+		{},
+		{},
+		{ targetProjectId?: string } & import('./v1/handlers/migration/types').MigrationBundle,
+		{}
+	>;
+	type DataTableExport = AuthenticatedRequest<{}, {}, {}, { dataTableId?: string }>;
+	type DataTableImport = AuthenticatedRequest<
+		{},
+		{},
+		{ targetProjectId?: string } & import('./v1/handlers/migration/types').DataTableExportBundle,
+		{}
+	>;
+}
+
+export declare namespace FolderRequest {
+	type Create = AuthenticatedRequest<
+		{},
+		{},
+		{ projectId: string; folderId?: string; name: string },
+		{}
+	>;
+}
+
 export type OperationID = 'getUsers' | 'getUser';
 
 type PaginationBase = { limit: number };

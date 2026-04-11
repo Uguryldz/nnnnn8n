@@ -1,17 +1,23 @@
 import { GlobalConfig } from '@n8n/config';
-import type { SharedWorkflow, User } from '@n8n/db';
+import type { User } from '@n8n/db';
 import {
+	SharedWorkflow,
 	WorkflowEntity,
 	WorkflowTagMapping,
 	TagRepository,
 	SharedWorkflowRepository,
 	WorkflowRepository,
 } from '@n8n/db';
+import type { WorkflowSharingRole } from '@n8n/permissions';
 import { Container } from '@n8n/di';
 import { PROJECT_OWNER_ROLE_SLUG, type Scope } from '@n8n/permissions';
 
+import { ForbiddenError } from '@/errors/response-errors/forbidden.error';
 import { License } from '@/license';
+import { FolderService } from '@/services/folder.service';
+import { ProjectService } from '@/services/project.service.ee';
 import { WorkflowCreationService } from '@/workflows/workflow-creation.service';
+import { WorkflowHistoryService } from '@/workflows/workflow-history/workflow-history.service';
 import { WorkflowSharingService } from '@/workflows/workflow-sharing.service';
 
 function insertIf(condition: boolean, elements: string[]): string[] {
@@ -101,5 +107,58 @@ export async function updateTags(workflowId: string, newTags: string[]): Promise
 			WorkflowTagMapping,
 			newTags.map((tagId) => ({ tagId, workflowId })),
 		);
+	});
+}
+
+export async function createWorkflowInProjectAndFolder(
+	workflow: WorkflowEntity,
+	user: User,
+	projectId: string,
+	folderId: string | undefined,
+	role: WorkflowSharingRole = 'workflow:owner',
+): Promise<WorkflowEntity> {
+	const projectService = Container.get(ProjectService);
+	const folderService = Container.get(FolderService);
+	const workflowHistoryService = Container.get(WorkflowHistoryService);
+	const { manager: dbManager } = Container.get(SharedWorkflowRepository);
+
+	const project = await projectService.getProjectWithScope(user, projectId, ['workflow:create']);
+	if (!project) {
+		throw new ForbiddenError('You do not have permission to create workflows in this project.');
+	}
+	if (folderId) {
+		await folderService.findFolderInProjectOrFail(folderId, projectId);
+	}
+
+	return await dbManager.transaction(async (transactionManager) => {
+		const newWorkflow = new WorkflowEntity();
+		Object.assign(newWorkflow, workflow);
+		const savedWorkflow = await transactionManager.save(newWorkflow);
+
+		if (folderId) {
+			const parentFolder = await folderService.findFolderInProjectOrFail(
+				folderId,
+				projectId,
+				transactionManager,
+			);
+			await transactionManager.update(
+				WorkflowEntity,
+				{ id: savedWorkflow.id },
+				{ parentFolder },
+			);
+		}
+
+		const newSharedWorkflow = new SharedWorkflow();
+		Object.assign(newSharedWorkflow, { role, user, project, workflow: savedWorkflow });
+		await transactionManager.save(newSharedWorkflow);
+
+		await workflowHistoryService.saveVersion(
+			user,
+			savedWorkflow,
+			savedWorkflow.id,
+			false,
+			transactionManager,
+		);
+		return savedWorkflow;
 	});
 }

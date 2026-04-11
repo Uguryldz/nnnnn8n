@@ -13,4 +13,5 @@ export const enum WORKFLOW_MENU_ACTIONS {
 	CHANGE_OWNER = 'change-owner',
 	UNPUBLISH = 'unpublish',
 	SHARE = 'share',
+	PUSH_TO_AZURE = 'push-to-azure',
 }

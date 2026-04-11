@@ -1,0 +1,31 @@
+type: object
+properties:
+  id:
+    type: string
+  name:
+    type: string
+  path:
+    $ref: './migration-path.yml'
+  columns:
+    type: array
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        index:
+          type: number
+  rows:
+    type: array
+    items:
+      type: object
+  createdAt:
+    type: string
+    format: date-time
+  updatedAt:
+    type: string
+    format: date-time

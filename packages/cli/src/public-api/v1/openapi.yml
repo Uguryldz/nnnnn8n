@@ -42,8 +42,22 @@ tags:
     description: API capability discovery
   - name: Insights
     description: Operations about insights
+  - name: Migration
+    description: Project migration export (workflow + dependencies as single JSON)
+  - name: Folders
+    description: Operations about folders
 
 paths:
+  /folders:
+    $ref: './handlers/folders/spec/paths/folders.yml'
+  /migration/export:
+    $ref: './handlers/migration/spec/paths/migration.export.yml'
+  /migration/import:
+    $ref: './handlers/migration/spec/paths/migration.import.yml'
+  /migration/data-table/export:
+    $ref: './handlers/migration/spec/paths/migration.datatable.export.yml'
+  /migration/data-table/import:
+    $ref: './handlers/migration/spec/paths/migration.datatable.import.yml'
   /audit:
     $ref: './handlers/audit/spec/paths/audit.yml'
   /credentials:

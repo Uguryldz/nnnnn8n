@@ -2,6 +2,7 @@
 import { computed, ref, useCssModule } from 'vue';
 import { type ActionDropdownItem, N8nActionDropdown } from '@n8n/design-system';
 import type { WorkflowDataUpdate } from '@n8n/rest-api-client';
+import { publishMigrationToAzure } from '@n8n/rest-api-client/api/migration';
 import { useToast } from '@/app/composables/useToast';
 import { useI18n } from '@n8n/i18n';
 import { createEventBus } from '@n8n/utils/event-bus';
@@ -196,6 +197,19 @@ const workflowMenuItems = computed<Array<ActionDropdownItem<WORKFLOW_MENU_ACTION
 		});
 	}
 
+	if (sourceControlStore.isEnterpriseSourceControlEnabled) {
+		actions.push({
+			id: WORKFLOW_MENU_ACTIONS.PUSH_TO_AZURE,
+			label: locale.baseText('menuActions.pushToAzure'),
+			disabled:
+				!onWorkflowPage.value ||
+				onExecutionsTab.value ||
+				!props.id ||
+				sourceControlStore.preferences.branchReadOnly ||
+				collaborationReadOnly.value,
+		});
+	}
+
 	actions.push({
 		id: WORKFLOW_MENU_ACTIONS.SETTINGS,
 		label: locale.baseText('generic.settings'),
@@ -328,6 +342,21 @@ async function onWorkflowMenuSelect(action: WORKFLOW_MENU_ACTIONS): Promise<void
 				}
 			}
 
+			break;
+		}
+		case WORKFLOW_MENU_ACTIONS.PUSH_TO_AZURE: {
+			const workflowId = getWorkflowId(props.id, route.params.name);
+			if (!workflowId) break;
+			try {
+				const result = await publishMigrationToAzure(rootStore.restApiContext, workflowId);
+				toast.showMessage({
+					title: locale.baseText('menuActions.pushToAzure'),
+					message: `${locale.baseText('menuActions.pushToAzure.success')} ${result.blobName}`,
+					type: 'success',
+				});
+			} catch (error) {
+				toast.showError(error, locale.baseText('error'));
+			}
 			break;
 		}
 		case WORKFLOW_MENU_ACTIONS.SETTINGS: {

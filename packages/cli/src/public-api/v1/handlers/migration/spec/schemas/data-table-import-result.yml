@@ -1,0 +1,17 @@
+type: object
+description: Result of importing a data table export bundle
+required:
+  - created
+  - dataTableId
+  - rowsInserted
+properties:
+  created:
+    type: boolean
+    description: true if table was created, false if existing table was matched by name
+  dataTableId:
+    type: string
+    description: Target data table ID (new or existing)
+  rowsInserted:
+    type: integer
+    minimum: 0
+    description: Number of rows inserted (only when created is true)

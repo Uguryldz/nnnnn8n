@@ -1,0 +1,24 @@
+type: object
+properties:
+  id:
+    type: string
+  name:
+    type: string
+  path:
+    $ref: './migration-path.yml'
+  nodes:
+    type: array
+  connections:
+    type: object
+  settings:
+    type: object
+  versionId:
+    type: string
+  triggerCount:
+    type: number
+  isArchived:
+    type: boolean
+  meta:
+    type: object
+    nullable: true
+    default: {}

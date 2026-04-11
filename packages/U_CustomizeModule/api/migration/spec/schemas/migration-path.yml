@@ -1,0 +1,12 @@
+type: object
+properties:
+  projectId:
+    type: string
+  projectName:
+    type: string
+  folderId:
+    type: string
+    nullable: true
+  folderPath:
+    type: string
+    nullable: true

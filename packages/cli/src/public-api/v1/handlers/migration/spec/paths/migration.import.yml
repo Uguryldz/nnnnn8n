@@ -1,0 +1,35 @@
+post:
+  x-eov-operation-id: importMigration
+  x-eov-operation-handler: v1/handlers/migration/migration.handler
+  tags:
+    - Migration
+  summary: Import project migration bundle
+  description: |
+    Imports a migration bundle (workflows, credentials, data tables, variables, tags). No extra parameters required.
+    Uses the export's project and folder structure: same project/folder name exists → use it; otherwise create. Workflows are placed there.
+    Workflow, data table, credential, variable, tag are matched by name: if exists → update; if not → create. No duplicates.
+    Optional targetProjectId forces everything into that one project; when omitted, projects and folders from the export are resolved or created by name.
+  operationId: import-migration
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          allOf:
+            - $ref: '../schemas/migration-bundle.yml'
+            - type: object
+              properties:
+                targetProjectId:
+                  type: string
+                  description: Optional. If set, all content goes into this project. If omitted, export's project and folder hierarchy is recreated by name (get or create).
+  responses:
+    '200':
+      description: Import result with created/updated counts and the new source workflow ID.
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/migration-import-result.yml'
+    '400':
+      $ref: '../../../../shared/spec/responses/badRequest.yml'
+    '401':
+      $ref: '../../../../shared/spec/responses/unauthorized.yml'
