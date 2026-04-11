@@ -1,5 +1,5 @@
 import { UserError } from 'n8n-workflow';
-import type { AssignableProjectRole } from '@n8n/db';
+import type { AssignableProjectRole } from '@n8n/permissions';
 
 export class TeamProjectOverQuotaError extends UserError {
 	constructor(limit: number) {

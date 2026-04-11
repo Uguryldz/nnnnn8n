@@ -1,5 +1,6 @@
 import type { ModuleInterface } from '@n8n/decorators';
 import { BackendModule } from '@n8n/decorators';
+import { Container } from '@n8n/di';
 
 @BackendModule({
 	name: 'source-control',
@@ -7,8 +8,11 @@ import { BackendModule } from '@n8n/decorators';
 })
 export class SourceControlModule implements ModuleInterface {
 	async init() {
-		// Source control requires 2000+ lines of git/file services that are
-		// entirely in .ee files. A full cleanroom rewrite is pending.
-		// Module is registered but inactive to keep the codebase .ee-free.
+		await import('./sc.controller');
+		await import('./sc-preferences.service');
+		await import('./sc-git.service');
+
+		const { SCPreferencesService } = await import('./sc-preferences.service');
+		await Container.get(SCPreferencesService).loadFromDb();
 	}
 }
