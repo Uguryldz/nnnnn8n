@@ -1,0 +1,47 @@
+{
+	"Body": {
+		"QueryLimitResponse": {
+			"QueryLimitResult": {
+				"ResponseCode": 0,
+				"ResponseMessage": "İşlem başarılı.",
+				"Value": {
+					"LimitInformation": [
+						{
+							"AvailableLimit": 1321904,
+							"GuarantedInvoiceAmount": 4678096,
+							"Limit": 6000000,
+							"LimitExpiryDate": "2026-02-11",
+							"NotGuarantedInvoiceAmount": 0,
+							"PendingInvoiceAmount": 4678096,
+							"PendingInvoiceCount": 8,
+							"PurchaserCode": 597,
+							"Risk": 0
+						},
+						{
+							"AvailableLimit": 2000000,
+							"GuarantedInvoiceAmount": 0,
+							"Limit": 2000000,
+							"LimitExpiryDate": "2026-06-02",
+							"NotGuarantedInvoiceAmount": 0,
+							"PendingInvoiceAmount": 0,
+							"PendingInvoiceCount": 0,
+							"PurchaserCode": 509,
+							"Risk": 0
+						},
+						{
+							"AvailableLimit": 2000000,
+							"GuarantedInvoiceAmount": 0,
+							"Limit": 2000000,
+							"LimitExpiryDate": "2026-06-22",
+							"NotGuarantedInvoiceAmount": 0,
+							"PendingInvoiceAmount": 0,
+							"PendingInvoiceCount": 0,
+							"PurchaserCode": 509,
+							"Risk": 0
+						}
+					]
+				}
+			}
+		}
+	}
+}

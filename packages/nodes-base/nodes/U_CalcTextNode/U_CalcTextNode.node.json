@@ -1,0 +1,18 @@
+{
+	"node": "n8n-nodes-base.uCalcTextNode",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"details": "The U Calc Text Node allows you to execute custom JavaScript code for text calculation and formatting.",
+	"categories": ["Development", "Core Nodes"],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.code/"
+			}
+		]
+	},
+	"alias": ["CalcText", "TextCalc", "UCalc"],
+	"subcategories": {
+		"Core Nodes": ["Helpers", "Data Transformation"]
+	}
+}

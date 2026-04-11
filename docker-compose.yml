@@ -1,0 +1,170 @@
+version: '3.8'
+
+volumes:
+  db_storage:
+  ihub_storage:
+  redis_storage:
+  traefik_data:
+  packhub_storage:
+
+x-shared: &shared
+  restart: always
+  image: abradockerhub/ihub:v2.0.13
+  environment:
+    - DB_TYPE=postgresdb
+    - DB_POSTGRESDB_HOST=postgres
+    - DB_POSTGRESDB_DATABASE=ihub
+    - DB_POSTGRESDB_USER=ihub
+    - DB_POSTGRESDB_PASSWORD=ihub
+    - EXECUTIONS_MODE=queue
+    - QUEUE_BULL_REDIS_HOST=redis
+    - QUEUE_HEALTH_CHECK_ACTIVE=true
+    - QUEUE_BULL_REDIS_PASSWORD=redis
+    - N8N_ENCRYPTION_KEY=aB3dE5FgH1jK9LmN2pQrT8UvWxYz0AbC
+    - N8N_DIAGNOSTICS_ENABLED=false
+    - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+    - N8N_TEMPLATES_ENABLED=false
+    - N8N_SESSION_COOKIE_SAMESITE=Lax
+    - N8N_SESSION_COOKIE_SECURE=false
+    - N8N_BASIC_AUTH_ACTIVE=false
+    - N8N_REINSTALL_MISSING_PACKAGES=true
+
+    
+    - NODE_FUNCTION_ALLOW_EXTERNAL=tcxUEbLyWSASqoq5DCsiT1SlaQO95HNK
+    - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+    - N8N_SECURE_COOKIE=false
+    - N8N_COMMUNITY_PACKAGES_ENABLED=true
+    - N8N_UNVERIFIED_PACKAGES_ENABLED=true
+    - EXECUTIONS_DATA_PRUNE=false
+    - EXECUTIONS_DATA_PRUNE_MAX_COUNT=0
+  links:
+    - postgres
+    - redis
+  volumes:
+    - ihub_storage:/home/node/.n8n
+  depends_on:
+    redis:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+
+
+services:
+  postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      - POSTGRES_USER=ihub
+      - POSTGRES_PASSWORD=ihub
+      - POSTGRES_DB=ihub
+      - POSTGRES_NON_ROOT_USER=ihub
+      - POSTGRES_NON_ROOT_PASSWORD=ihub
+      - N8N_ENCRYPTION_KEY=aB3dE5FgH1jK9LmN2pQrT8UvWxYz0AbC
+    volumes:
+      - db_storage:/var/lib/postgresql/data
+    ports:
+      - "2222:5432"
+    networks:
+      - n8n
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h localhost -U ihub -d ihub']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:6-alpine
+    restart: always
+    command: ["redis-server", "--requirepass", "redis"]
+    ports:
+      - "1233:6379"
+    volumes:
+      - redis_storage:/data
+    networks:
+      - n8n
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  n8n:
+    <<: *shared
+    ports:
+      - "5678:5678"
+    networks:
+      - n8n
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.n8n-https.rule=Host(`localhost`) || Host(`4.223.142.232`)"
+      - "traefik.http.routers.n8n-https.entrypoints=websecure"
+      - "traefik.http.routers.n8n-https.tls=true"
+      - "traefik.http.routers.n8n-http.rule=Host(`localhost`) || Host(`4.223.142.232`)"
+      - "traefik.http.routers.n8n-http.entrypoints=web"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+      - "traefik.http.routers.n8n-https.service=n8n"
+      - "traefik.http.routers.n8n-http.service=n8n"
+
+  n8n-worker:
+    <<: *shared
+    command: ["./bin/n8n", "worker"]
+    depends_on:
+      - n8n
+    networks:
+      - n8n
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'n8n worker' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  n8n-worker-2:
+    <<: *shared
+    command: ["./bin/n8n", "worker"]
+    depends_on:
+      - n8n
+    networks:
+      - n8n
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'n8n worker' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  traefik:
+    image: traefik:v3.0
+    restart: always
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik:/etc/traefik/dynamic
+    networks:
+      - n8n
+
+networks:
+  n8n:
+
+

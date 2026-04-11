@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Root>
+	<!-- FİRMADAN BANKAYA GÖNDERİM VE İPTAL, BANKADAN FİRMAYA GÖNDERİLEN ÖN AKIBET VE TAHSİLAT DOSYASI -->
+	
+	<Header>
+		<Field name="KayitTipi" fixed="H" length="1" align="left" padChar=" " description="Kayıt Tipi (1 karakter, 'H' sabit değer)." />
+		<Field name="FirmaKodu" expr="'000000001'" length="9" align="right" padChar="0" description="Firma Kodu (9 karakter, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="BolgeKodu" fixed="" length="20" align="left" padChar=" " description="Bölge Kodu (20 karakter, boş, kullanılmıyor)." />
+		<Field name="DosyaTarihi" fixed="Date_yyyyMMdd" length="8" align="right" padChar="0" description="Dosya Tarihi (8 karakter, yyyyMMdd formatı, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="BankaKodu" expr="'0001'" length="4" align="right" padChar="0" description="Banka kodu (4 karakter, numeric, sağ hizalı, 0 ile pad)." />
+	</Header>
+	
+	<Line arrayPath="Body/QueryInvoiceResponse/QueryInvoiceResult/Value/Invoice">
+		<Field name="KayitTipi" fixed="D" length="1" align="left" padChar=" " description="Kayıt Tipi (1 karakter, 'D' sabit değer)." />
+		<Field name="MusteriKodu" key="PurchaserCode" length="25" align="left" padChar=" " description="Müşteri Kodu (25 karakter, string, sol hizalı, boşluk ile pad)." />
+		<Field name="MusteriUnvani" key="Description" length="30" align="left" padChar=" " description="Müşteri Ünvanı (30 karakter, string, sol hizalı, boşluk ile pad)." />
+		<Field name="FaturaNo" key="InvoiceNumber" length="16" align="left" padChar=" " description="Fatura No (16 karakter, string, sol hizalı, boşluk ile pad)." />
+		<Field name="FaturaTarihi" key="InvoiceDate" length="8" align="right" padChar="0" inputType="yyyy-MM-dd" outputType="yyyyMMdd" description="Fatura Tarihi (8 karakter, yyyyMMdd formatı, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="FaturaVadeTarihi" key="InvoiceDueDate" length="8" align="right" padChar="0" inputType="yyyy-MM-dd" outputType="yyyyMMdd" description="Fatura Vade Tarihi (8 karakter, yyyyMMdd formatı, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="FaturaTutari" key="InvoiceAmount" length="15" decimals="2" align="right" padChar="0" description="Fatura Tutarı (15 karakter, 2 ondalık, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="FaturaDovizKodu" key="Currency" length="3" align="left" padChar=" " description="Fatura Döviz Kodu (3 karakter, string, sol hizalı, boşluk ile pad)." />
+		<Field name="IskontoFaizTutari" expr="0" length="15" decimals="2" align="right" padChar="0" description="İskonto/Faiz Tutarı (15.2 formatında numeric, kullanılmıyor)." />
+		<Field name="TahsilatTutari" key="PaymentAmount" length="15" decimals="2" align="right" padChar="0" description="Tahsilat Tutarı (15.2 formatında numeric, sadece tahsilatta kullanılıyor)." />
+		<Field name="TahsilatDovizKodu" key="Currency" length="3" align="left" padChar=" " description="Tahsilat Döviz Kodu (3 karakter, sadece tahsilatta kullanılıyor)." />
+		<Field name="IskontoFaizTah" expr="0" length="15" decimals="2" align="right" padChar="0" description="İskonto/Faiz Tahsilat Tutarı (15.2 formatında numeric, kullanılmıyor)." />
+		<Field name="Kur" expr="0" length="15" decimals="2" align="right" padChar="0" description="Tahsilat Kuru (15.2 formatında numeric, kullanılmıyor)." />
+		<Field name="MahsupFaturaNo" fixed="" length="16" align="left" padChar=" " description="Mahsup Fatura No (16 karakter, kullanılmıyor)." />
+		<Field name="IslemTarihi" key="PaymentDate" length="8" align="right" padChar="0" inputType="yyyy-MM-dd" outputType="yyyyMMdd" description="İşlem Tarihi (8 karakter, yyyyMMdd formatı, sadece tahsilatta kullanılıyor)." />
+		<Field name="ProvizyonRefNo" fixed="" length="20" align="left" padChar=" " description="Provizyon Ref No (20 karakter, kullanılmıyor)." />
+		<Field name="Parametreler" fixed="" length="50" align="left" padChar=" " description="Parametreler (50 karakter, kullanılmıyor)." />
+		<Field name="FaturaTipi" expr="InvoiceStatus === 'PaymentDone' ? 'A' : 'B'" length="1" align="left" padChar=" " description="Fatura Tipi (1 karakter, B:Borç, A:Alacak, M:Mahsup)." />
+		<Field name="IslemKodu" expr="'01'" length="2" align="right" padChar="0" description="İşlem Kodu (2 karakter, numeric, sağ hizalı, 0 ile pad)." />
+	</Line>
+	
+	<Footer>
+		<Field name="KayitTipi" fixed="T" length="1" align="left" padChar=" " description="Kayıt Tipi (1 karakter, 'T' sabit değer)." />
+		<Field name="DetayKayitSayisi" calc="calc" calcType="count" length="7" align="right" padChar="0" description="Detay Kayıt Sayısı (7 karakter, numeric, sağ hizalı, 0 ile pad)." />
+	</Footer>
+</Root>
+

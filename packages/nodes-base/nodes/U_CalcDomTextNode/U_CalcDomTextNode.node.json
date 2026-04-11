@@ -1,0 +1,18 @@
+{
+	"node": "n8n-nodes-base.uCalcDomTextNode",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"details": "The U Calc DOM Text Node allows you to execute custom JavaScript code for text calculation and formatting using DOM parser instead of regex.",
+	"categories": ["Development", "Core Nodes"],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.code/"
+			}
+		]
+	},
+	"alias": ["CalcDomText", "TextCalcDom", "UCalcDom"],
+	"subcategories": {
+		"Core Nodes": ["Helpers", "Data Transformation"]
+	}
+}

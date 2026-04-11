@@ -1,0 +1,14 @@
+{
+	"node": "n8n-nodes-base.uCDataJsonArrayXml",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"details": "JSON verisini Handlebars template ile XML'e dönüştürür",
+	"categories": ["Transform", "Data"],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://docs.n8n.io/integrations/creating-nodes/"
+			}
+		]
+	}
+}

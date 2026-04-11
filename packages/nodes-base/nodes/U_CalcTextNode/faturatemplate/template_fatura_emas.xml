@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Root>
+	<!-- EMAS Fatura Dosyası - FATYYAYGGXX.TXT -->
+	
+	<SettingsMap>
+		<GroupCode field="IslemTipi" description="İşlem Tipi'ne göre gruplama için." />
+	</SettingsMap>
+	
+	<Header>
+		<Field name="KayitTipi" fixed="H" length="1" align="left" padChar=" " description="Kayıt Tipi (1 karakter, 'H' sabit değer)." />
+		<Field name="GonderimTarihi" fixed="Date_yyyyMMdd" length="8" align="right" padChar="0" description="Gönderim Tarihi (8 karakter, yyyyMMdd formatı, numeric, sağ hizalı, 0 ile pad)." />
+	</Header>
+	
+	<Line arrayPath="Body/QueryInvoiceResponse/QueryInvoiceResult/Value/Invoice">
+		<Field name="KayitTipi" fixed="D" length="1" align="left" padChar=" " description="Kayıt Tipi (1 karakter, 'D' sabit değer)." />
+		<Field name="BayiMusteriKodu" key="PurchaserCode" length="9" align="left" padChar=" " description="Bayi/Müşteri Kodu (9 karakter, string, sol hizalı, boşluk ile pad)." />
+		<Field name="Unvan" key="Description" length="50" align="left" padChar=" " description="Unvan (50 karakter, string, sol hizalı, boşluk ile pad)." />
+		<Field name="FaturaNo" key="InvoiceNumber" length="10" align="left" padChar=" " description="Fatura No (10 karakter, string, sol hizalı, boşluk ile pad)." />
+		<Field name="VadeTarihi" key="InvoiceDueDate" length="8" align="right" padChar="0" inputType="yyyy-MM-dd" outputType="yyyyMMdd" description="Vade Tarihi (8 karakter, yyyyMMdd formatı, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="Tutar" key="InvoiceAmount" length="15" decimals="2" align="right" padChar="0" description="Tutar (15 karakter, 2 ondalık, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="IslemTipi" key="IslemTipi" expr="'Y'" length="1" align="left" padChar=" " description="İşlem Tipi (1 karakter, Y:Yeni, İ:İptal)." />
+	</Line>
+	
+	<Footer>
+		<Field name="KayitTipi" fixed="F" length="1" align="left" padChar=" " description="Kayıt Tipi (1 karakter, 'F' sabit değer)." />
+		<Field name="YeniFaturaAdedi" calc="calc" calcType="count" filterValue="Y" length="7" align="right" padChar="0" description="Yeni Fatura Adedi (7 karakter, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="YeniFaturaTutari" key="InvoiceAmount" calc="calc" calcType="sum" filterValue="Y" length="15" decimals="2" align="right" padChar="0" description="Yeni Fatura Tutarı (15 karakter, 2 ondalık, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="IptalFaturaAdedi" calc="calc" calcType="count" filterValue="İ" length="7" align="right" padChar="0" description="İptal Fatura Adedi (7 karakter, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="IptalFaturaTutari" key="InvoiceAmount" calc="calc" calcType="sum" filterValue="İ" length="15" decimals="2" align="right" padChar="0" description="İptal Fatura Tutarı (15 karakter, 2 ondalık, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="IadeFaturaAdedi" calc="calc" calcType="count" filterValue="R" length="7" align="right" padChar="0" description="İade Fatura Adedi (7 karakter, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="IadeFaturaTutari" key="InvoiceAmount" calc="calc" calcType="sum" filterValue="R" length="15" decimals="2" align="right" padChar="0" description="İade Fatura Tutarı (15 karakter, 2 ondalık, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="PrimFaturaAdedi" calc="calc" calcType="count" filterValue="P" length="7" align="right" padChar="0" description="Prim Fatura Adedi (7 karakter, numeric, sağ hizalı, 0 ile pad)." />
+		<Field name="PrimFaturaTutari" key="InvoiceAmount" calc="calc" calcType="sum" filterValue="P" length="15" decimals="2" align="right" padChar="0" description="Prim Fatura Tutarı (15 karakter, 2 ondalık, numeric, sağ hizalı, 0 ile pad)." />
+	</Footer>
+</Root>
+

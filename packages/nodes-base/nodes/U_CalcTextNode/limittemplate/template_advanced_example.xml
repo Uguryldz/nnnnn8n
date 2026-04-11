@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Root>
+
+  <!-- 
+    GELİŞMİŞ ÖRNEK TEMPLATE
+    Bu template, tüm özellikleri ve formülleri kapsar:
+    - Header, Line, Footer yapısı
+    - Fixed, key, expr field tipleri
+    - Tarih formatları: Date_, DateTime_, Dateadd_, DateTimeadd_
+    - Tarih dönüşümleri: inputType/outputType
+    - Decimal formatting ve precision
+    - Padding ve alignment (left/right)
+    - Matematik işlemleri: +, -, *, /, %, **
+    - Helper fonksiyonlar: round, floor, ceil, abs, min, max, sum, avg
+    - Footer calculations: count, sum, min, max, avg, sumExpr
+    - SettingsMap ve grouping
+    - Karmaşık expression'lar
+  -->
+
+  <!-- SettingsMap: Gruplama ayarları -->
+  <SettingsMap>
+    <GroupCode field="PurchaserCode" description="Kayıtların PurchaserCode alanına göre gruplanması." />
+  </SettingsMap>
+
+  <!-- BAŞLIK KAYDI (Header Record) -->
+  <Header>
+    <!-- Kayıt Tipi: Fixed değer -->
+    <Field name="KayitTipi" fixed="H" length="1" align="left" padChar=" " 
+           description="Kayıt tipi (1 karakter, 'H' sabit değer)." />
+
+    <!-- Banka Kodu: Fixed değer -->
+    <Field name="BankaKodu" fixed="0001" length="4" align="right" padChar="0" 
+           description="Banka kodu (4 karakter, numeric, sağ hizalı, 0 ile pad)." />
+
+    <!-- Dosya Tarihi: Date_ macro kullanımı -->
+    <Field name="DosyaTarihi" fixed="Date_ddMMyyyy" length="8" align="right" padChar="0" 
+           description="Dosya tarihi (8 karakter, GGAAYYYY formatı, Date_ macro ile)." />
+
+    <!-- Dosya Zamanı: DateTime_ macro kullanımı -->
+    <Field name="DosyaZamani" fixed="DateTime_HHmmss" length="6" align="right" padChar="0" 
+           description="Dosya zamanı (6 karakter, SSDDSS formatı, DateTime_ macro ile)." />
+
+    <!-- Gelecek Tarih: Dateadd_ macro kullanımı (7 gün sonra) -->
+    <Field name="GecerlilikTarihi" fixed="Dateadd_Day_7_ddMMyyyy" length="8" align="right" padChar="0" 
+           description="Geçerlilik tarihi (bugünden 7 gün sonra, Dateadd_ macro ile)." />
+
+    <!-- Önceki Ay Son Günü: Special macro -->
+    <Field name="OncekiAySonGunu" fixed="PrevMonthLastDay" length="8" align="right" padChar="0" 
+           description="Önceki ayın son günü (8 karakter, ddMMyyyy formatı)." />
+
+    <!-- Sonraki Ay İlk Günü: Special macro -->
+    <Field name="SonrakiAyIlkGunu" fixed="NextMonthFirstDay" length="8" align="right" padChar="0" 
+           description="Sonraki ayın ilk günü (8 karakter, ddMMyyyy formatı)." />
+
+    <!-- Kurum Adı: Fixed string -->
+    <Field name="KurumAdi" fixed="EMASMAKINA" length="20" align="left" padChar=" " 
+           description="Kurum adı (20 karakter, string, sol hizalı, boşluk ile pad)." />
+
+    <!-- Toplam Kayıt Sayısı: Expression ile (data'dan) -->
+    <Field name="ToplamKayitSayisi" expr="items.length" length="7" align="right" padChar="0" 
+           description="Toplam kayıt sayısı (7 karakter, expression ile hesaplanıyor)." />
+  </Header>
+
+  <!-- DETAY KAYDI (Detail Record) -->
+  <Line arrayPath="Body/QueryLimitResponse/QueryLimitResult/Value/LimitInformation">
+    <!-- Kayıt Tipi: Fixed değer -->
+    <Field name="KayitTipi" fixed="D" length="1" align="left" padChar=" " 
+           description="Kayıt tipi (1 karakter, 'D' sabit değer)." />
+
+    <!-- Abone No: Key ile veri çekme -->
+    <Field name="AboneNo" key="PurchaserCode" length="9" align="left" padChar=" " 
+           description="Abone no (9 karakter, PurchaserCode'dan, sol hizalı)." />
+
+    <!-- İsim: Boş alan (fixed empty) -->
+    <Field name="Isim" fixed="" length="30" align="left" padChar=" " 
+           description="İsim (30 karakter, boş, sol hizalı)." />
+
+    <!-- Limit Tutarı: Key ile, decimal formatting -->
+    <Field name="LimitTutari" key="Limit" length="15" decimals="2" align="right" padChar="0" 
+           description="Limit tutarı (15 karakter, 2 ondalık, numeric, sağ hizalı, 0 ile pad)." />
+
+    <!-- Kullanılan Limit: Expression ile hesaplama (Limit - AvailableLimit) -->
+    <Field name="KullanilanLimit" expr="Number(Limit || 0) - Number(AvailableLimit || 0)" length="15" decimals="2" align="right" padChar="0" 
+           description="Kullanılan limit (Expression: Limit - AvailableLimit)." />
+
+    <!-- Kullanılabilir Limit: Key ile -->
+    <Field name="KullanilabilirLimit" key="AvailableLimit" length="15" decimals="2" align="right" padChar="0" 
+           description="Kullanılabilir limit (15 karakter, 2 ondalık)." />
+
+    <!-- Kullanım Yüzdesi: Expression ile (Kullanılan / Limit * 100) -->
+    <Field name="KullanimYuzdesi" expr="(Number(Limit || 0) - Number(AvailableLimit || 0)) / Number(Limit || 1) * 100" length="6" decimals="2" align="right" padChar="0" 
+           description="Kullanım yüzdesi (Expression: (Kullanılan / Limit) * 100)." />
+
+    <!-- Fatura Tutarı: Key ile -->
+    <Field name="FaturaTutari" key="PendingInvoiceAmount" length="15" decimals="2" align="right" padChar="0" 
+           description="Fatura tutarı (15 karakter, 2 ondalık)." />
+
+    <!-- Fatura Adet: Key ile -->
+    <Field name="FaturaAdet" key="PendingInvoiceCount" length="7" align="right" padChar="0" 
+           description="Fatura adet (7 karakter, integer, sağ hizalı)." />
+
+    <!-- Ortalama Fatura: Expression ile (Fatura Tutarı / Fatura Adet) -->
+    <Field name="OrtalamaFatura" expr="Number(PendingInvoiceAmount || 0) / (Number(PendingInvoiceCount || 0) || 1)" length="15" decimals="2" align="right" padChar="0" 
+           description="Ortalama fatura (Expression: Fatura Tutarı / Fatura Adet)." />
+
+    <!-- Risk Durumu: Expression ile (AvailableLimit < 0 ise 'R', değilse 'N') -->
+    <Field name="RiskDurumu" expr="Number(AvailableLimit || 0) < 0 ? 'R' : 'N'" length="1" align="left" padChar=" " 
+           description="Risk durumu (Expression: AvailableLimit < 0 ? 'R' : 'N')." />
+
+    <!-- Limit Geçerlilik Tarihi: Key ile, tarih dönüşümü -->
+    <Field name="LimitGecerlilikTarihi" key="LimitExpiryDate" length="8" align="right" padChar="0" 
+           inputType="yyyy-MM-dd" outputType="yyyyMMdd"
+           description="Limit geçerlilik tarihi (8 karakter, tarih dönüşümü: yyyy-MM-dd → yyyyMMdd)." />
+
+    <!-- Helper Fonksiyon Örnekleri -->
+    <!-- Round: round() fonksiyonu -->
+    <Field name="LimitYuvarlanmis" expr="round(Limit, -3)" length="15" decimals="0" align="right" padChar="0" 
+           description="Limit yuvarlanmış (round helper fonksiyonu, binler basamağına)." />
+
+    <!-- Abs: abs() fonksiyonu -->
+    <Field name="KullanilanLimitMutlak" expr="abs(Number(Limit || 0) - Number(AvailableLimit || 0))" length="15" decimals="2" align="right" padChar="0" 
+           description="Kullanılan limit mutlak değer (abs helper fonksiyonu)." />
+
+    <!-- Min: min() fonksiyonu -->
+    <Field name="MinLimit" expr="min(Limit, AvailableLimit)" length="15" decimals="2" align="right" padChar="0" 
+           description="Minimum limit (min helper fonksiyonu)." />
+
+    <!-- Max: max() fonksiyonu -->
+    <Field name="MaxLimit" expr="max(Limit, AvailableLimit)" length="15" decimals="2" align="right" padChar="0" 
+           description="Maximum limit (max helper fonksiyonu)." />
+
+    <!-- Floor: floor() fonksiyonu -->
+    <Field name="KullanimYuzdesiTam" expr="floor((Number(Limit || 0) - Number(AvailableLimit || 0)) / Number(Limit || 1) * 100)" length="6" decimals="0" align="right" padChar="0" 
+           description="Kullanım yüzdesi tam sayı (floor helper fonksiyonu)." />
+
+    <!-- Ceil: ceil() fonksiyonu -->
+    <Field name="KullanimYuzdesiYukari" expr="ceil((Number(Limit || 0) - Number(AvailableLimit || 0)) / Number(Limit || 1) * 100)" length="6" decimals="0" align="right" padChar="0" 
+           description="Kullanım yüzdesi yukarı yuvarlanmış (ceil helper fonksiyonu)." />
+
+    <!-- Karmaşık Expression: Çoklu koşul -->
+    <Field name="DurumKodu" expr="Number(AvailableLimit || 0) < 0 ? '1' : (Number(PendingInvoiceAmount || 0) > 0 ? '2' : '0')" length="1" align="right" padChar="0" 
+           description="Durum kodu (Karmaşık expression: ternary operator)." />
+
+    <!-- Matematik İşlemleri: Toplama -->
+    <Field name="ToplamLimitVeFatura" expr="Number(Limit || 0) + Number(PendingInvoiceAmount || 0)" length="15" decimals="2" align="right" padChar="0" 
+           description="Toplam limit ve fatura (Expression: Limit + PendingInvoiceAmount)." />
+
+    <!-- Matematik İşlemleri: Çarpma -->
+    <Field name="LimitKare" expr="Number(Limit || 0) * Number(Limit || 0)" length="15" decimals="2" align="right" padChar="0" 
+           description="Limit karesi (Expression: Limit * Limit)." />
+
+    <!-- Matematik İşlemleri: Modulo -->
+    <Field name="LimitMod10" expr="Number(Limit || 0) % 10" length="2" decimals="0" align="right" padChar="0" 
+           description="Limit mod 10 (Expression: Limit % 10)." />
+  </Line>
+
+  <!-- TOPLAM KAYDI (Footer Record) -->
+  <Footer>
+    <!-- Kayıt Tipi: Fixed değer -->
+    <Field name="KayitTipi" fixed="F" length="1" align="left" padChar=" " 
+           description="Kayıt tipi (1 karakter, 'F' sabit değer)." />
+
+    <!-- Kayıt Sayısı: count calculation -->
+    <Field name="KayitSayisi" calc="calc" calcType="count" length="7" align="right" padChar="0" 
+           description="Detay kayıt sayısı (7 karakter, count calculation)." />
+
+    <!-- Toplam Limit: sum calculation -->
+    <Field name="ToplamLimit" key="Limit" calc="calc" calcType="sum" length="15" decimals="2" align="right" padChar="0" 
+           description="Toplam limit (15 karakter, sum calculation)." />
+
+    <!-- Toplam Kullanılan Limit: sumExpr calculation -->
+    <Field name="ToplamKullanilanLimit" calc="calc" calcType="sumExpr" expr="Number(Limit || 0) - Number(AvailableLimit || 0)" length="15" decimals="2" align="right" padChar="0" 
+           description="Toplam kullanılan limit (sumExpr calculation: sum of expression)." />
+
+    <!-- Toplam Kullanılabilir Limit: sum calculation -->
+    <Field name="ToplamKullanilabilirLimit" key="AvailableLimit" calc="calc" calcType="sum" length="15" decimals="2" align="right" padChar="0" 
+           description="Toplam kullanılabilir limit (sum calculation)." />
+
+    <!-- Toplam Fatura: sum calculation -->
+    <Field name="ToplamFatura" key="PendingInvoiceAmount" calc="calc" calcType="sum" length="15" decimals="2" align="right" padChar="0" 
+           description="Toplam fatura (sum calculation)." />
+
+    <!-- Minimum Limit: min calculation -->
+    <Field name="MinLimit" key="Limit" calc="calc" calcType="min" length="15" decimals="2" align="right" padChar="0" 
+           description="Minimum limit (min calculation)." />
+
+    <!-- Maximum Limit: max calculation -->
+    <Field name="MaxLimit" key="Limit" calc="calc" calcType="max" length="15" decimals="2" align="right" padChar="0" 
+           description="Maximum limit (max calculation)." />
+
+    <!-- Ortalama Limit: avg calculation -->
+    <Field name="OrtalamaLimit" key="Limit" calc="calc" calcType="avg" length="15" decimals="2" align="right" padChar="0" 
+           description="Ortalama limit (avg calculation)." />
+
+    <!-- Ortalama Kullanım Yüzdesi: avg calculation with expression -->
+    <Field name="OrtalamaKullanimYuzdesi" calc="calc" calcType="avg" expr="(Number(Limit || 0) - Number(AvailableLimit || 0)) / Number(Limit || 1) * 100" length="6" decimals="2" align="right" padChar="0" 
+           description="Ortalama kullanım yüzdesi (avg calculation with expression)." />
+
+    <!-- Toplam Fatura Adet: sum calculation -->
+    <Field name="ToplamFaturaAdet" key="PendingInvoiceCount" calc="calc" calcType="sum" length="7" align="right" padChar="0" 
+           description="Toplam fatura adet (sum calculation)." />
+
+    <!-- Ortalama Fatura Tutarı: Expression ile (Toplam Fatura / Toplam Fatura Adet) -->
+    <Field name="OrtalamaFaturaTutari" expr="items.reduce((s, x) => s + (Number(x.PendingInvoiceAmount) || 0), 0) / (items.reduce((s, x) => s + (Number(x.PendingInvoiceCount) || 0), 0) || 1)" length="15" decimals="2" align="right" padChar="0" 
+           description="Ortalama fatura tutarı (Expression: sum(PendingInvoiceAmount) / sum(PendingInvoiceCount))." />
+  </Footer>
+
+</Root>
+

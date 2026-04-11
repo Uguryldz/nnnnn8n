@@ -23,6 +23,9 @@
   ],
   "n8n": {
     "credentials": [
+      "dist/credentials/HttpTokenApi.credentials.js",
+      "dist/credentials/CryptedApi.credentials.js",
+      "dist/credentials/SoapBasicAuthApi.credentials.js",
       "dist/credentials/ActionNetworkApi.credentials.js",
       "dist/credentials/ActiveCampaignApi.credentials.js",
       "dist/credentials/AcuitySchedulingApi.credentials.js",
@@ -417,6 +420,23 @@
       "dist/credentials/ZulipApi.credentials.js"
     ],
     "nodes": [
+      "dist/nodes/AddJsonData/AddJsonData.node.js",
+      "dist/nodes/ContentMapper/USchemaContentMapper.node.js",
+      "dist/nodes/DateCalculator/UDateCalculator.node.js",
+      "dist/nodes/SftpNode/SftpNode.node.js",
+      "dist/nodes/SoapRequest/SoapCdataXmlParser.node.js",
+      "dist/nodes/SoapRequest/SoapRequest.node.js",
+      "dist/nodes/SoapRequest/SoapWebhookParser.node.js",
+      "dist/nodes/SoapSchemaGenerator/SoapWsdlCreator.node.js",
+      "dist/nodes/SoapSchemaGenerator/WorkflowToXsdSchemaCreator.node.js",
+      "dist/nodes/TextFileParser/TextFileParser.node.js",
+      "dist/nodes/U_Advanced_WsdlCreator/UAdvancedWsdlCreator.node.js",
+      "dist/nodes/U_BoaGenericServicesCreator/U_BoaGenericServicesCreator.node.js",
+      "dist/nodes/U_CDataJsonArrayXml/U_CDataJsonArrayXml.node.js",
+      "dist/nodes/U_CalcDomTextNode/U_CalcDomTextNode.node.js",
+      "dist/nodes/U_CalcTextNode/U_CalcTextNode.node.js",
+      "dist/nodes/U_SoapRequestBuilder/U_SoapRequestBuilder.node.js",
+      "dist/nodes/XmlDataParser/XmlDataParser.node.js",
       "dist/nodes/ActionNetwork/ActionNetwork.node.js",
       "dist/nodes/ActiveCampaign/ActiveCampaign.node.js",
       "dist/nodes/ActiveCampaign/ActiveCampaignTrigger.node.js",

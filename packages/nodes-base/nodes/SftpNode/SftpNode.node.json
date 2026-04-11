@@ -1,0 +1,18 @@
+{
+	"node": "n8n-nodes-base.sftp",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Data", "Storage"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol"
+			}
+		]
+	}
+}

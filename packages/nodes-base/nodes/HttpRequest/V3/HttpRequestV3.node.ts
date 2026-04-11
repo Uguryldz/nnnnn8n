@@ -731,8 +731,19 @@ export class HttpRequestV3 implements INodeType {
 						);
 						requestOAuth2.catch(() => {});
 						requestPromises.push(requestOAuth2);
+					} else if (genericCredentialType) {
+						// httpTokenApi, cryptedApi, etc. – any credential with genericAuth
+						const reqWithAuth = this.helpers.requestWithAuthentication.call(
+							this,
+							genericCredentialType,
+							requestOptions,
+							undefined,
+							itemIndex,
+						);
+						reqWithAuth.catch(() => {});
+						requestPromises.push(reqWithAuth);
 					} else {
-						// bearerAuth, queryAuth, headerAuth, digestAuth, none
+						// none
 						const request = this.helpers.request(requestOptions);
 						request.catch(() => {});
 						requestPromises.push(request);

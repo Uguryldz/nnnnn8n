@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Root>
+
+  <!-- 
+    Bu template, SOAP QueryLimitResponse veri yapısına göre hazırlanmıştır.
+    
+    SOAP XML yapısı parse edildikten sonra JSON formatı:
+    {
+      "Envelope": {
+        "Body": {
+          "QueryLimitResponse": {
+            "QueryLimitResult": {
+              "ResponseCode": "000",
+              "ResponseMessage": "İşlem başarılı.",
+              "Value": {
+                "LimitInformation": [
+                  {
+                    "AvailableLimit": "1321904.00",
+                    "GuarantedInvoiceAmount": "4678096.00",
+                    "Limit": "6000000.00",
+                    "LimitExpiryDate": "2026-02-11",
+                    "NotGuarantedInvoiceAmount": "0",
+                    "PendingInvoiceAmount": "94678096.00",
+                    "PendingInvoiceCount": "8",
+                    "PurchaserCode": "597",
+                    "Risk": "0"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    Not: Namespace'ler parse edildikten sonra kaldırılmış olabilir.
+    Eğer namespace'ler hala varsa, yol yapısı farklı olabilir.
+    Örnek: "Body/QueryLimitResponse/QueryLimitResult/Value/LimitInformation"
+    veya "Envelope/Body/QueryLimitResponse/QueryLimitResult/Value/LimitInformation"
+  -->
+
+  <!-- BAŞLIK KAYDI (Header Record) - Kayıt Tipi: 'H' -->
+  <Header>
+    <!-- Kayıt Tipi: A, 1 karakter, değer: 'H' -->
+    <Field name="KayitTipi" fixed="H" length="1" align="left" padChar=" " 
+           description="Kayıt tipi (1 karakter, 'H' sabit değer)." />
+
+    <!-- Banka Kodu: N, 4 karakter -->
+    <Field name="BankaKodu" fixed="0001" length="4" align="right" padChar="0" 
+           description="İlgili Bankanın Merkez Bankası Kodu (4 karakter, numeric, sağ hizalı, 0 ile pad)." />
+
+    <!-- Dosya Tarihi: N, 8 karakter, GGAAYYYY formatı -->
+    <Field name="DosyaTarihi" fixed="Date_ddMMyyyy" length="8" align="right" padChar="0" 
+           description="Dosya tarihi (8 karakter, GGAAYYYY formatı, numeric, sağ hizalı, 0 ile pad)." />
+
+    <!-- Kurum Adı: A, 10 karakter -->
+    <Field name="KurumAdi" fixed="EMASMAKINA" length="10" align="left" padChar=" " 
+           description="Kurum kısa adı (10 karakter, string, sol hizalı, boşluk ile pad)." />
+  </Header>
+
+  <!-- DETAY KAYDI (Detail Record) - Kayıt Tipi: 'D' -->
+  <Line arrayPath="Body/QueryLimitResponse/QueryLimitResult/Value/LimitInformation">
+    <!-- Kayıt Tipi: A, 1 karakter, değer: 'D' -->
+    <Field name="KayitTipi" fixed="D" length="1" align="left" padChar=" " 
+           description="Kayıt tipi (1 karakter, 'D' sabit değer)." />
+
+    <!-- Abone No: A, 9 karakter, PurchaserCode'dan gelecek -->
+    <Field name="AboneNo" key="PurchaserCode" length="9" align="left" padChar=" " 
+           description="Abone no / Bayi kodu (9 karakter, string, sol hizalı, boşluk ile pad)." />
+
+    <!-- İsim: A, 30 karakter (veri yoksa boş) -->
+    <Field name="Isim" fixed="" length="30" align="left" padChar=" " 
+           description="İsim (30 karakter, string, sol hizalı, boşluk ile pad)." />
+
+    <!-- Şube Kodu: N, 4 karakter, zorunlu değil, default: 0000 -->
+    <Field name="SubeKodu" fixed="0000" length="4" align="right" padChar="0" 
+           description="Şube kodu (4 karakter, numeric, sağ hizalı, 0 ile pad, zorunlu değil)." />
+
+    <!-- Hesap Numarası: N, 7 karakter, zorunlu değil, default: 0000000 -->
+    <Field name="HesapNumarasi" fixed="0000000" length="7" align="right" padChar="0" 
+           description="Hesap numarası (7 karakter, numeric, sağ hizalı, 0 ile pad, zorunlu değil)." />
+
+    <!-- Limit Tutarı: N, 12.2 = Bayiye Tahsis Edilen Kredi Limiti -->
+    <Field name="LimitTutari" key="Limit" length="15" decimals="2" align="right" padChar="0" 
+           description="Bayiye tahsis edilen kredi limiti (12.2 formatında numeric, sağ hizalı, 0 ile pad)." />
+
+    <!-- Kullanılan Limit Tutarı: N, 12.2 = Limit - AvailableLimit -->
+    <Field name="KullanilanLimitTutari" expr="Number(Limit || 0) - Number(AvailableLimit || 0)" length="15" decimals="2" align="right" padChar="0" 
+           description="Bayinin kullanmış olduğu kredi tutarı = Limit - AvailableLimit (12.2 formatında numeric)." />
+
+    <!-- Kullanılabilir Limit Tutarı: N, 12.2 = AvailableLimit -->
+    <Field name="KullanilabilirLimitTutari" key="AvailableLimit" length="15" decimals="2" align="right" padChar="0" 
+           description="Kullanılabilir net limit = AvailableLimit (12.2 formatında numeric)." />
+
+    <!-- Toplam Fatura Tutarı: N, 12.2 = PendingInvoiceAmount -->
+    <Field name="ToplamFaturaTutari" key="PendingInvoiceAmount" length="15" decimals="2" align="right" padChar="0" 
+           description="Banka sisteminde varolan vadesi gelmeyen faturaların toplam tutarı (12.2 formatında numeric)." />
+  </Line>
+
+  <!-- TOPLAM KAYDI (Footer Record) - Kayıt Tipi: 'F' -->
+  <Footer>
+    <!-- Kayıt Tipi: A, 1 karakter, değer: 'F' -->
+    <Field name="KayitTipi" fixed="F" length="1" align="left" padChar=" " 
+           description="Kayıt tipi (1 karakter, 'F' sabit değer)." />
+
+    <!-- Kayıt Sayısı: N, 7 karakter (detay kayıt sayısı) -->
+    <Field name="KayitSayisi" calc="calc" calcType="count" length="7" align="right" padChar="0" 
+           description="Detay kayıt sayısı (7 karakter, numeric, sağ hizalı, 0 ile pad)." />
+
+    <!-- Toplam Limit Tutarı: N, 12.2 -->
+    <Field name="ToplamLimitTutari" key="Limit" calc="calc" calcType="sum" length="15" decimals="2" align="right" padChar="0" 
+           description="Bayilere tahsis edilen toplam kredi limiti (12.2 formatında numeric)." />
+
+    <!-- Toplam Kullanılan Limit Tutarı: N, 12.2 = sum(Limit - AvailableLimit) -->
+    <Field name="ToplamKullanilanLimitTutari" calc="calc" calcType="sumExpr" expr="Number(Limit || 0) - Number(AvailableLimit || 0)" length="15" decimals="2" align="right" padChar="0" 
+           description="Bayilerin kullanmış olduğu toplam kredi tutarı (12.2 formatında numeric)." />
+
+    <!-- Toplam Kullanılabilir Limit Tutarı: N, 12.2 = sum(AvailableLimit) -->
+    <Field name="ToplamKullanilabilirLimitTutari" key="AvailableLimit" calc="calc" calcType="sum" length="15" decimals="2" align="right" padChar="0" 
+           description="Kullanılabilir toplam kredi (12.2 formatında numeric)." />
+
+    <!-- Toplam Faturalar Tutarı: N, 12.2 = sum(PendingInvoiceAmount) -->
+    <Field name="ToplamFaturalarTutari" key="PendingInvoiceAmount" calc="calc" calcType="sum" length="15" decimals="2" align="right" padChar="0" 
+           description="Toplam fatura toplamı (12.2 formatında numeric)." />
+  </Footer>
+
+</Root>
+

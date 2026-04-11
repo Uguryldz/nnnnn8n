@@ -1,0 +1,52 @@
+{
+	"Body": {
+		"QueryInvoiceResponse": {
+			"QueryInvoiceResult": {
+				"ResponseCode": 0,
+				"ResponseMessage": "İşlem başarılı.",
+				"Value": {
+					"Invoice": [
+						{
+							"AdditionalField": "",
+							"Currency": "TRY",
+							"Description": "",
+							"InvoiceAmount": 3816.08,
+							"InvoiceDate": "2024-09-26",
+							"InvoiceDueDate": "2024-09-26",
+							"InvoiceId": 16149,
+							"InvoiceNumber": 240502082,
+							"InvoiceStatus": "PaymentDone",
+							"LastCollectionAmount": 3816.08,
+							"LastCollectionAttemptDate": "2024-09-26",
+							"MaturityType": "Futures",
+							"PaymentAmount": 3816.08,
+							"PaymentDate": "2024-09-26",
+							"PurchaserCode": 20006454,
+							"SystemDate": "2024-05-29",
+							"TransactionDescription": { "@_nil": true }
+						},
+						{
+							"AdditionalField": "",
+							"Currency": "TRY",
+							"Description": "",
+							"InvoiceAmount": 22503.14,
+							"InvoiceDate": "2024-11-24",
+							"InvoiceDueDate": "2024-11-25",
+							"InvoiceId": 15313,
+							"InvoiceNumber": 240201899,
+							"InvoiceStatus": "PaymentDone",
+							"LastCollectionAmount": 22503.14,
+							"LastCollectionAttemptDate": "2024-11-25",
+							"MaturityType": "Futures",
+							"PaymentAmount": 22503.14,
+							"PaymentDate": "2024-11-25",
+							"PurchaserCode": 20006454,
+							"SystemDate": "2024-02-29",
+							"TransactionDescription": { "@_nil": true }
+						}
+					]
+				}
+			}
+		}
+	}
+}

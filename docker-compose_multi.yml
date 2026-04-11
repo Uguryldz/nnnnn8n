@@ -1,0 +1,267 @@
+volumes:
+  db_storage:
+  ihub_test_storage:
+  ihub_prod_storage:
+  redis_test_storage:
+  redis_prod_storage:
+
+# Shared configuration for n8n instances
+x-shared-n8n: &shared-n8n
+  restart: always
+  image: abradockerhub/ihub:latest
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  # Shared PostgreSQL database
+  postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      - POSTGRES_USER=ihub
+      - POSTGRES_PASSWORD=ihub
+      - POSTGRES_DB=postgres
+      - POSTGRES_NON_ROOT_USER=ihub
+      - POSTGRES_NON_ROOT_PASSWORD=ihub
+    volumes:
+      - db_storage:/var/lib/postgresql/data
+      - ./postgres-init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    ports:
+      - "2222:5432"
+    networks:
+      - n8n-multi
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h localhost -U ihub']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis for Test environment
+  redis-test:
+    image: redis:6-alpine
+    restart: always
+    command: ["redis-server", "--requirepass", "redis_test", "--port", "6379"]
+    ports:
+      - "1234:6379"
+    volumes:
+      - redis_test_storage:/data
+    networks:
+      - n8n-multi
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'redis_test', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Redis for Prod environment
+  redis-prod:
+    image: redis:6-alpine
+    restart: always
+    command: ["redis-server", "--requirepass", "redis_prod", "--port", "6379"]
+    ports:
+      - "1235:6379"
+    volumes:
+      - redis_prod_storage:/data
+    networks:
+      - n8n-multi
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'redis_prod', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ============================================
+  # TEST ENVIRONMENT (Port 5677)
+  # ============================================
+  n8n-test:
+    <<: *shared-n8n
+    container_name: n8n-test
+    ports:
+      - "5677:5678"
+    networks:
+      - n8n-multi
+    environment:
+      - EXECUTIONS_MODE=queue
+      - QUEUE_HEALTH_CHECK_ACTIVE=true
+      - N8N_ENCRYPTION_KEY=aB3dE5FgH1jK9LmN2pQrT8UvWxYz0AbC
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+      - N8N_TEMPLATES_ENABLED=false
+      - N8N_SESSION_COOKIE_SAMESITE=Lax
+      - N8N_SESSION_COOKIE_SECURE=false
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_REINSTALL_MISSING_PACKAGES=true
+      - NODE_FUNCTION_ALLOW_EXTERNAL=tcxUEbLyWSASqoq5DCsiT1SlaQO95HNK
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - N8N_SECURE_COOKIE=false
+      - N8N_COMMUNITY_PACKAGES_ENABLED=true
+      - N8N_UNVERIFIED_PACKAGES_ENABLED=true
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_DATABASE=ihub_test
+      - DB_POSTGRESDB_USER=ihub
+      - DB_POSTGRESDB_PASSWORD=ihub
+      - QUEUE_BULL_REDIS_HOST=redis-test
+      - QUEUE_BULL_REDIS_PASSWORD=redis_test
+      - N8N_PORT=5678
+      - N8N_HOST=0.0.0.0
+    volumes:
+      - ihub_test_storage:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  n8n-test-worker:
+    <<: *shared-n8n
+    container_name: n8n-test-worker
+    command: ["./bin/n8n", "worker"]
+    networks:
+      - n8n-multi
+    environment:
+      - EXECUTIONS_MODE=queue
+      - QUEUE_HEALTH_CHECK_ACTIVE=true
+      - N8N_ENCRYPTION_KEY=aB3dE5FgH1jK9LmN2pQrT8UvWxYz0AbC
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+      - N8N_TEMPLATES_ENABLED=false
+      - N8N_SESSION_COOKIE_SAMESITE=Lax
+      - N8N_SESSION_COOKIE_SECURE=false
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_REINSTALL_MISSING_PACKAGES=true
+      - NODE_FUNCTION_ALLOW_EXTERNAL=tcxUEbLyWSASqoq5DCsiT1SlaQO95HNK
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - N8N_SECURE_COOKIE=false
+      - N8N_COMMUNITY_PACKAGES_ENABLED=true
+      - N8N_UNVERIFIED_PACKAGES_ENABLED=true
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_DATABASE=ihub_test
+      - DB_POSTGRESDB_USER=ihub
+      - DB_POSTGRESDB_PASSWORD=ihub
+      - QUEUE_BULL_REDIS_HOST=redis-test
+      - QUEUE_BULL_REDIS_PASSWORD=redis_test
+    volumes:
+      - ihub_test_storage:/home/node/.n8n
+    depends_on:
+      n8n-test:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'n8n worker' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================
+  # PROD ENVIRONMENT (Port 5678)
+  # ============================================
+  n8n-prod:
+    <<: *shared-n8n
+    container_name: n8n-prod
+    ports:
+      - "5678:5678"
+    networks:
+      - n8n-multi
+    environment:
+      - EXECUTIONS_MODE=queue
+      - QUEUE_HEALTH_CHECK_ACTIVE=true
+      - N8N_ENCRYPTION_KEY=aB3dE5FgH1jK9LmN2pQrT8UvWxYz0AbC
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+      - N8N_TEMPLATES_ENABLED=false
+      - N8N_SESSION_COOKIE_SAMESITE=Lax
+      - N8N_SESSION_COOKIE_SECURE=false
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_REINSTALL_MISSING_PACKAGES=true
+      - NODE_FUNCTION_ALLOW_EXTERNAL=tcxUEbLyWSASqoq5DCsiT1SlaQO95HNK
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - N8N_SECURE_COOKIE=false
+      - N8N_COMMUNITY_PACKAGES_ENABLED=true
+      - N8N_UNVERIFIED_PACKAGES_ENABLED=true
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_DATABASE=ihub_prod
+      - DB_POSTGRESDB_USER=ihub
+      - DB_POSTGRESDB_PASSWORD=ihub
+      - QUEUE_BULL_REDIS_HOST=redis-prod
+      - QUEUE_BULL_REDIS_PASSWORD=redis_prod
+      - N8N_PORT=5678
+      - N8N_HOST=0.0.0.0
+    volumes:
+      - ihub_prod_storage:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis-prod:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  n8n-prod-worker:
+    <<: *shared-n8n
+    container_name: n8n-prod-worker
+    command: ["./bin/n8n", "worker"]
+    networks:
+      - n8n-multi
+    environment:
+      - EXECUTIONS_MODE=queue
+      - QUEUE_HEALTH_CHECK_ACTIVE=true
+      - N8N_ENCRYPTION_KEY=aB3dE5FgH1jK9LmN2pQrT8UvWxYz0AbC
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+      - N8N_TEMPLATES_ENABLED=false
+      - N8N_SESSION_COOKIE_SAMESITE=Lax
+      - N8N_SESSION_COOKIE_SECURE=false
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_REINSTALL_MISSING_PACKAGES=true
+      - NODE_FUNCTION_ALLOW_EXTERNAL=tcxUEbLyWSASqoq5DCsiT1SlaQO95HNK
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - N8N_SECURE_COOKIE=false
+      - N8N_COMMUNITY_PACKAGES_ENABLED=true
+      - N8N_UNVERIFIED_PACKAGES_ENABLED=true
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_DATABASE=ihub_prod
+      - DB_POSTGRESDB_USER=ihub
+      - DB_POSTGRESDB_PASSWORD=ihub
+      - QUEUE_BULL_REDIS_HOST=redis-prod
+      - QUEUE_BULL_REDIS_PASSWORD=redis_prod
+    volumes:
+      - ihub_prod_storage:/home/node/.n8n
+    depends_on:
+      n8n-prod:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis-prod:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'n8n worker' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  n8n-multi:
+    driver: bridge

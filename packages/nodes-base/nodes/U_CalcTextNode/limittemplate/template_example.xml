@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Root>
+
+  <!-- 
+    Bu template, SOAP QueryLimitResponse veri yapısına göre hazırlanmıştır.
+    
+    SOAP XML yapısı parse edildikten sonra JSON formatı:
+    {
+      "Envelope": {
+        "Body": {
+          "QueryLimitResponse": {
+            "QueryLimitResult": {
+              "ResponseCode": "000",
+              "ResponseMessage": "İşlem başarılı.",
+              "Value": {
+                "LimitInformation": [
+                  {
+                    "AvailableLimit": "1321904.00",
+                    "GuarantedInvoiceAmount": "4678096.00",
+                    "Limit": "6000000.00",
+                    "LimitExpiryDate": "2026-02-11",
+                    "NotGuarantedInvoiceAmount": "0",
+                    "PendingInvoiceAmount": "94678096.00",
+                    "PendingInvoiceCount": "8",
+                    "PurchaserCode": "597",
+                    "Risk": "0"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    Not: Namespace'ler parse edildikten sonra kaldırılmış olabilir.
+    Eğer namespace'ler hala varsa, yol yapısı farklı olabilir.
+    Örnek: "Body/QueryLimitResponse/QueryLimitResult/Value/LimitInformation"
+    veya "Envelope/Body/QueryLimitResponse/QueryLimitResult/Value/LimitInformation"
+  -->
+
+  <Line arrayPath="Body/QueryLimitResponse/QueryLimitResult/Value/LimitInformation">
+    <!-- Bayi Kodu: 20 A = String, 20 karakter, sağ hizalı -->
+    <Field name="BayiKodu" key="PurchaserCode" length="20" align="left" padChar=" " 
+           description="Bayi kodu (20 karakter, string, sağ hizalı)." />
+
+    <!-- Tahsis edilmiş kredi: 12.2 N = Banka tarafından tahsis edilmiş kredi -->
+    <Field name="TahsisEdilmisKredi" key="Limit" length="15" decimals="2" align="right" padChar="0" 
+           description="Tahsis edilmiş kredi (12 karakter toplam, 2 ondalık, numeric, sağ hizalı, 0 ile pad)." />
+
+    <!-- 
+      Kalan limit: 12.2 N = Tahsis edilmiş kredi - fiili kullanılan kredi - ileri vadeli faturalar
+      Formül: Limit - (Limit - AvailableLimit) - PendingInvoiceAmount = AvailableLimit - PendingInvoiceAmount
+      Fiili kullanılan kredi = Limit - AvailableLimit
+      Not: Negatif değerler için mutlak değer alınır (abs kullanılır) - "-" işareti kaldırılır
+    -->
+    <Field name="KalanLimit" expr="abs(Number(AvailableLimit || 0) - Number(PendingInvoiceAmount || 0))" length="15" decimals="2" align="right" padChar="0" 
+           description="Kalan limit = abs(AvailableLimit - PendingInvoiceAmount) (12.2 formatında numeric, mutlak değer)." />
+
+    <!-- 
+      Kalan Limit (+/-): 01 A = Kalan limit pozitif ise +, negatif ise -
+    -->
+    <Field name="KalanLimitIsaret" expr="(Number(AvailableLimit || 0) - Number(PendingInvoiceAmount || 0)) >= 0 ? '+' : '-'" length="1" align="right" padChar=" " 
+           description="Kalan limit işareti (+ veya -), 1 karakter, sağ hizalı." />
+
+    <!-- 
+      Kullanılabilir limit: 12.2 N = Tahsis edilmiş kredi - fiili kullanılan kredi
+      = AvailableLimit (direkt değer)
+    -->
+    <Field name="KullanilabilirLimit" key="AvailableLimit" length="15" decimals="2" align="right" padChar="0" 
+           description="Kullanılabilir limit = AvailableLimit (12.2 formatında numeric)." />
+
+    <!-- 
+      Kullanılabilir limit (+/-): 01 A = Kullanılabilir limit pozitif ise +, negatif ise -
+    -->
+    <Field name="KullanilabilirLimitIsaret" expr="Number(AvailableLimit || 0) >= 0 ? '+' : '-'" length="1" align="right" padChar=" " 
+           description="Kullanılabilir limit işareti (+ veya -), 1 karakter, sağ hizalı." />
+
+    <!-- İleri vadeli faturalar adet: 07 N = Müşterinin ileri vadeli faturaları (adet) -->
+    <Field name="IleriVadeliFaturalarAdet" key="PendingInvoiceCount" length="7" align="right" padChar="0" 
+           description="İleri vadeli faturalar adet (7 karakter, integer, sağ hizalı, 0 ile pad)." />
+
+    <!-- İleri vadeli faturalar tutar: 12.2 N = Müşterinin ileri vadeli faturaları (Tutar) -->
+    <Field name="IleriVadeliFaturalarTutar" key="PendingInvoiceAmount" length="15" decimals="2" align="right" padChar="0" 
+           description="İleri vadeli faturalar tutar (15 karakter toplam, nokta ve 2 ondalık dahil)." />
+  </Line>
+
+</Root>
+
