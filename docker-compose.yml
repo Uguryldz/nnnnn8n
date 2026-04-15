@@ -9,7 +9,7 @@ volumes:
 
 x-shared: &shared
   restart: always
-  image: abradockerhub/ihub:v2.0.13
+  image: abradockerhub/ihub:v2.1.4
   environment:
     - DB_TYPE=postgresdb
     - DB_POSTGRESDB_HOST=postgres

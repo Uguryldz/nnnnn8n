@@ -26,6 +26,9 @@
 !docker/images/runners
 !docker/images/runners/n8n-task-runners.json
 
+# Custom root entrypoint (used by our Dockerfile — shims ./bin/n8n prefix for worker services)
+!docker-entrypoint.sh
+
 # === benchmark image (packages/@n8n/benchmark/Dockerfile) ===
 !package.json
 !pnpm-lock.yaml

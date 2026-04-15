@@ -24,7 +24,9 @@
   "n8n": {
     "credentials": [
       "dist/credentials/HttpTokenApi.credentials.js",
+      "dist/credentials/HttpTokenRefreshApi.credentials.js",
       "dist/credentials/CryptedApi.credentials.js",
+      "dist/credentials/CryptedScriptApi.credentials.js",
       "dist/credentials/SoapBasicAuthApi.credentials.js",
       "dist/credentials/ActionNetworkApi.credentials.js",
       "dist/credentials/ActiveCampaignApi.credentials.js",

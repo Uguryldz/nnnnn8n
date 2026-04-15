@@ -551,6 +551,9 @@ export class FrontendService {
 
 		this.settings.folders.enabled = true;
 
+		this.settings.workflowHistory.licensePruneTime = -1;
+		this.settings.workflowHistory.pruneTime = getWorkflowHistoryPruneTime();
+
 		// Refresh evaluation settings
 		this.settings.evaluation.quota = this.licenseState.getMaxWorkflowsWithEvaluations();
 

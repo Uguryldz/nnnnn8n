@@ -551,6 +551,13 @@ export class FrontendService {
 
 		this.settings.folders.enabled = true;
 
+		// Workflow history: expose unlimited license quota to the frontend so
+		// the "Upgrade plan" footer is hidden. Actual retention still comes from
+		// the config helper (N8N_WORKFLOW_HISTORY_PRUNE_TIME) below, so users
+		// see consistent retention numbers in the UI.
+		this.settings.workflowHistory.licensePruneTime = -1;
+		this.settings.workflowHistory.pruneTime = getWorkflowHistoryPruneTime();
+
 		// Refresh evaluation settings
 		this.settings.evaluation.quota = this.licenseState.getMaxWorkflowsWithEvaluations();
 

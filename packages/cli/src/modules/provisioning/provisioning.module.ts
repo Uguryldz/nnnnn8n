@@ -46,12 +46,24 @@ export class ProvisioningModule implements ModuleInterface {
 		const lic = Container.get(License);
 		const origIsLicensed = lic.isLicensed.bind(lic);
 		const alwaysLicensedFeatures = new Set([
-			'feat:sharing', 'feat:ldap', 'feat:variables', 'feat:sourceControl',
-			'feat:customRoles', 'feat:advancedPermissions', 'feat:advancedExecutionFilters',
-			'feat:debugInEditor', 'feat:binaryDataS3', 'feat:workerView',
-			'feat:workflowDiffs', 'feat:namedVersions', 'feat:personalSpacePolicy',
-			'feat:dataRedaction', 'feat:folders', 'feat:projectRole:admin',
-			'feat:projectRole:editor', 'feat:projectRole:viewer',
+			'feat:sharing',
+			'feat:ldap',
+			'feat:variables',
+			'feat:sourceControl',
+			'feat:customRoles',
+			'feat:advancedPermissions',
+			'feat:advancedExecutionFilters',
+			'feat:debugInEditor',
+			'feat:binaryDataS3',
+			'feat:workerView',
+			'feat:workflowDiffs',
+			'feat:namedVersions',
+			'feat:personalSpacePolicy',
+			'feat:dataRedaction',
+			'feat:folders',
+			'feat:projectRole:admin',
+			'feat:projectRole:editor',
+			'feat:projectRole:viewer',
 		]);
 		lic.isLicensed = (feature: string) =>
 			alwaysLicensedFeatures.has(feature) || origIsLicensed(feature);
@@ -69,5 +81,6 @@ export class ProvisioningModule implements ModuleInterface {
 		lic.getUsersLimit = () => -1;
 		lic.isWithinUsersLimit = () => true;
 		lic.isCustomNpmRegistryEnabled = () => true;
+		lic.getWorkflowHistoryPruneLimit = () => -1;
 	}
 }
