@@ -186,7 +186,7 @@ export class SourceControlService {
 			});
 			await this.sourceControlExportService.deleteRepositoryFolder();
 
-			if (preferences.connectionType === 'https') {
+			if (preferences.connectionType === 'https' || preferences.connectionType === 'http') {
 				await this.sourceControlPreferencesService.deleteHttpsCredentials();
 			} else if (!options.keepKeyPair) {
 				await this.sourceControlPreferencesService.deleteKeyPair();

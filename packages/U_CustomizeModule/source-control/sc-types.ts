@@ -11,7 +11,7 @@ export interface SCPreferences {
 	publicKey?: string;
 	initRepo?: boolean;
 	keyGeneratorType?: KeyGeneratorType;
-	connectionType?: 'ssh' | 'https';
+	connectionType?: 'ssh' | 'https' | 'http';
 	httpsUsername?: string;
 	httpsPassword?: string;
 }
@@ -29,7 +29,12 @@ export declare namespace SCRequest {
 	type UpdatePreferences = AuthenticatedRequest<{}, {}, Partial<SCPreferences>, {}>;
 	type Disconnect = AuthenticatedRequest<{}, {}, { keepKeyPair?: boolean }, {}>;
 	type GenerateKeyPair = AuthenticatedRequest<{}, {}, { keyGeneratorType?: KeyGeneratorType }, {}>;
-	type GetStatus = AuthenticatedRequest<{}, {}, {}, { direction?: string; preferLocalVersion?: string; verbose?: string }>;
+	type GetStatus = AuthenticatedRequest<
+		{},
+		{},
+		{},
+		{ direction?: string; preferLocalVersion?: string; verbose?: string }
+	>;
 }
 
 export const SC_PREFS_DB_KEY = 'features.sourceControl';

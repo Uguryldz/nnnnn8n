@@ -516,7 +516,7 @@ export type RelayEventMap = {
 		readOnlyInstance: boolean;
 		repoType: 'github' | 'gitlab' | 'other';
 		connected: boolean;
-		connectionType: 'ssh' | 'https';
+		connectionType: 'ssh' | 'https' | 'http';
 	};
 
 	'source-control-user-started-pull-ui': {

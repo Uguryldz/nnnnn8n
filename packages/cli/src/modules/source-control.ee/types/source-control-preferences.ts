@@ -38,8 +38,8 @@ export class SourceControlPreferences {
 	readonly keyGeneratorType?: KeyPairType;
 
 	@IsOptional()
-	@IsIn(['ssh', 'https'])
-	connectionType?: 'ssh' | 'https' = 'ssh';
+	@IsIn(['ssh', 'https', 'http'])
+	connectionType?: 'ssh' | 'https' | 'http' = 'ssh';
 
 	@IsOptional()
 	@IsString()

@@ -13,7 +13,7 @@ export type SourceControlPreferences = {
 	publicKey?: string;
 	keyGeneratorType?: TupleToUnion<SshKeyTypes>;
 	currentBranch?: string;
-	connectionType?: 'ssh' | 'https';
+	connectionType?: 'ssh' | 'https' | 'http';
 };
 
 export type SourceControlTreeRow<T extends SourceControlledFile = SourceControlledFile> =

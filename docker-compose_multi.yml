@@ -8,7 +8,7 @@ volumes:
 # Shared configuration for n8n instances
 x-shared-n8n: &shared-n8n
   restart: always
-  image: abradockerhub/ihub:latest
+  image: abradockerhub/ihub:v2.1.7
   depends_on:
     postgres:
       condition: service_healthy

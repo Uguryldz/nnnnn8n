@@ -49,7 +49,8 @@ export class ProvisioningModule implements ModuleInterface {
 			'feat:sharing',
 			'feat:ldap',
 			'feat:variables',
-			'feat:sourceControl',
+			// 'feat:sourceControl' — intentionally excluded so the EE source-control module
+			// does NOT load, allowing our cleanroom module (modules/source-control/) to handle it
 			'feat:customRoles',
 			'feat:advancedPermissions',
 			'feat:advancedExecutionFilters',

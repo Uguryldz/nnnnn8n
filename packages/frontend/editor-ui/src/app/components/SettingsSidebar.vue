@@ -33,6 +33,7 @@ const { settingsItems } = useSettingsItems();
 			<N8nLink size="small" @click="uiStore.openModal(ABOUT_MODAL_KEY)">
 				{{ i18n.baseText('settings.version') }} {{ rootStore.versionCli }}
 			</N8nLink>
+			<N8nText size="small" :class="$style.imageVersion">Image Version v2.1.7</N8nText>
 		</div>
 	</div>
 </template>
@@ -68,6 +69,13 @@ const { settingsItems } = useSettingsItems();
 
 .versionContainer {
 	padding: var(--spacing--xs);
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing--4xs);
+}
+
+.imageVersion {
+	color: var(--color--text--tint-2);
 }
 
 @media screen and (max-height: 420px) {

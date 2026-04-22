@@ -107,11 +107,18 @@ const onAction = async (action: string) => {
 			break;
 		}
 		case 'push-to-azure': {
+			const azureConfirm = await message.confirm(
+				'Değişiklikler onaya gönderilecektir. Devam etmek istiyor musunuz?',
+				'Onaya Gönderiliyor',
+				{
+					confirmButtonText: 'Evet',
+					cancelButtonText: 'Hayır',
+				},
+			);
+			if (azureConfirm !== MODAL_CONFIRM) break;
+
 			try {
-				const result = await publishDataTableToAzure(
-					rootStore.restApiContext,
-					props.dataTable.id,
-				);
+				const result = await publishDataTableToAzure(rootStore.restApiContext, props.dataTable.id);
 				toast.showMessage({
 					title: i18n.baseText('menuActions.pushToAzure'),
 					message: `${i18n.baseText('menuActions.pushToAzure.success')} ${result.blobName}`,

@@ -35,7 +35,7 @@ const documentTitle = useDocumentTitle();
 const loadingService = useLoadingService();
 
 const isConnected = ref(false);
-const connectionType = ref<'ssh' | 'https'>('ssh');
+const connectionType = ref<'ssh' | 'https' | 'http'>('ssh');
 const httpsUsername = ref('');
 const httpsPassword = ref('');
 
@@ -49,6 +49,7 @@ const branchNameOptions = computed(() =>
 const connectionTypeOptions = [
 	{ value: 'ssh', label: 'SSH' },
 	{ value: 'https', label: 'HTTPS' },
+	{ value: 'http', label: 'HTTP' },
 ];
 
 const onConnect = async () => {
@@ -63,7 +64,7 @@ const onConnect = async () => {
 			connectionType: connectionType.value,
 		};
 
-		if (connectionType.value === 'https') {
+		if (connectionType.value === 'https' || connectionType.value === 'http') {
 			connectionData.httpsUsername = httpsUsername.value;
 			connectionData.httpsPassword = httpsPassword.value;
 		}
@@ -176,6 +177,14 @@ const repoUrlValidationRules = computed<Array<Rule | RuleGroup>>(() => {
 				regex:
 					/^(?:git@|ssh:\/\/git@|[\w.-]+@)(?:[\w.-]+|\[[0-9a-fA-F:]+])(?::\d+)?[:\/][\w\-~.]+(?:\/[\w\-~.]+)*(?:\.git)?(?:\/.*)?$/,
 				message: locale.baseText('settings.sourceControl.repoUrlInvalid'),
+			},
+		});
+	} else if (connectionType.value === 'http') {
+		baseRules.push({
+			name: 'MATCH_REGEX',
+			config: {
+				regex: /^http:\/\/.+$/,
+				message: locale.baseText('settings.sourceControl.enterValidHttpUrl'),
 			},
 		});
 	} else {
@@ -305,7 +314,9 @@ watch(connectionType, () => {
 					{{
 						connectionType === 'ssh'
 							? locale.baseText('settings.sourceControl.sshRepoUrl')
-							: locale.baseText('settings.sourceControl.httpsRepoUrl')
+							: connectionType === 'http'
+								? 'HTTP Repository URL'
+								: locale.baseText('settings.sourceControl.httpsRepoUrl')
 					}}
 				</label>
 				<div :class="$style.groupFlex">
@@ -321,7 +332,9 @@ watch(connectionType, () => {
 						:placeholder="
 							connectionType === 'ssh'
 								? locale.baseText('settings.sourceControl.sshRepoUrlPlaceholder')
-								: locale.baseText('settings.sourceControl.httpsRepoUrlPlaceholder')
+								: connectionType === 'http'
+									? 'http://your-server:port/path/to/repo.git'
+									: locale.baseText('settings.sourceControl.httpsRepoUrlPlaceholder')
 						"
 						@validate="(value: boolean) => onValidate('repoUrl', value)"
 					/>
@@ -342,9 +355,15 @@ watch(connectionType, () => {
 				<N8nNotice v-if="!isConnected && connectionType === 'https'" type="info" class="mt-s">
 					{{ locale.baseText('settings.sourceControl.httpsFormatNotice') }}
 				</N8nNotice>
+				<N8nNotice v-if="!isConnected && connectionType === 'http'" type="info" class="mt-s">
+					Use HTTP format: http://your-server:port/path/to/repo.git
+				</N8nNotice>
 			</div>
 
-			<div v-if="connectionType === 'https' && !isConnected" :class="$style.group">
+			<div
+				v-if="(connectionType === 'https' || connectionType === 'http') && !isConnected"
+				:class="$style.group"
+			>
 				<label for="httpsUsername">{{
 					locale.baseText('settings.sourceControl.httpsUsername')
 				}}</label>
@@ -361,7 +380,10 @@ watch(connectionType, () => {
 				/>
 			</div>
 
-			<div v-if="connectionType === 'https' && !isConnected" :class="$style.group">
+			<div
+				v-if="(connectionType === 'https' || connectionType === 'http') && !isConnected"
+				:class="$style.group"
+			>
 				<label for="httpsPassword">{{
 					locale.baseText('settings.sourceControl.httpsPersonalAccessToken')
 				}}</label>

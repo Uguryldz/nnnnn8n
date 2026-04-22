@@ -126,7 +126,7 @@ export class SourceControlGitService {
 
 		const { simpleGit } = await import('simple-git');
 
-		if (preferences.connectionType === 'https') {
+		if (preferences.connectionType === 'https' || preferences.connectionType === 'http') {
 			const credentials = await this.sourceControlPreferencesService.getDecryptedHttpsCredentials();
 			const escapeShellArg = (arg: string) => `'${arg.replace(/'/g, "'\"'\"'")}'`;
 			const credentialScript = `!f() { echo username=${escapeShellArg(credentials.username)}; echo password=${escapeShellArg(credentials.password)}; }; f`;

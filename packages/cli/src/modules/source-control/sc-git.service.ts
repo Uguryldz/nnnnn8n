@@ -37,6 +37,18 @@ export class SCGitService {
 			} catch {
 				this.logger.debug('No SSH key available yet');
 			}
+		} else if (pref.connectionType === 'https' || pref.connectionType === 'http') {
+			try {
+				const creds = await this.prefs.getDecryptedHttpsCreds();
+				if (creds.username && creds.password) {
+					const token = Buffer.from(`${creds.username}:${creds.password}`).toString('base64');
+					env.GIT_CONFIG_COUNT = '1';
+					env.GIT_CONFIG_KEY_0 = 'http.extraheader';
+					env.GIT_CONFIG_VALUE_0 = `Authorization: Basic ${token}`;
+				}
+			} catch {
+				this.logger.debug('No HTTPS credentials available yet');
+			}
 		}
 
 		this.git = simpleGit({
@@ -59,26 +71,52 @@ export class SCGitService {
 		if (!isRepo) {
 			await g.init();
 			await g.addRemote('origin', repoUrl);
+		} else {
+			const remotes = await g.getRemotes(true);
+			const origin = remotes.find((r) => r.name === 'origin');
+			if (!origin) {
+				await g.addRemote('origin', repoUrl);
+			} else if (origin.refs?.fetch !== repoUrl) {
+				await g.remote(['set-url', 'origin', repoUrl]);
+			}
 		}
 
-		try {
-			await g.fetch('origin');
-		} catch (e) {
-			this.logger.warn('Git fetch failed during init', { error: (e as Error).message });
-		}
+		await g.fetch('origin');
 
 		const targetBranch = branch || SC_DEFAULT_BRANCH;
 		const branches = await g.branch();
-		if (!branches.all.includes(targetBranch) && !branches.all.includes(`remotes/origin/${targetBranch}`)) {
-			await g.checkoutLocalBranch(targetBranch);
-		} else {
+		const localExists = branches.all.includes(targetBranch);
+		const remoteExists = branches.all.includes(`remotes/origin/${targetBranch}`);
+
+		if (localExists) {
 			await g.checkout(targetBranch);
+		} else if (remoteExists) {
+			await g.checkout(['-b', targetBranch, `origin/${targetBranch}`]);
+		} else {
+			await g.checkoutLocalBranch(targetBranch);
 		}
+	}
+
+	private async ensureBranch(g: SimpleGit): Promise<string> {
+		const status = await g.branch();
+		if (status.current && !status.detached) return status.current;
+		const pref = this.prefs.getPreferences();
+		const target = pref.branchName || SC_DEFAULT_BRANCH;
+		try {
+			await g.checkout(target);
+		} catch {
+			await g.checkoutLocalBranch(target);
+		}
+		return target;
 	}
 
 	async listBranches(): Promise<{ branches: string[]; currentBranch: string }> {
 		const g = await this.ensureGit();
-		try { await g.fetch('origin'); } catch { /* offline ok */ }
+		try {
+			await g.fetch('origin');
+		} catch {
+			/* offline ok */
+		}
 		const result = await g.branch(['-a']);
 		return {
 			branches: result.all,
@@ -109,26 +147,46 @@ export class SCGitService {
 
 	async pushWorkfolder(message: string) {
 		const g = await this.ensureGit();
+		const branch = await this.ensureBranch(g);
 		await g.add('.');
 		const status = await g.status();
 		if (status.staged.length === 0) return { statusCode: 200, pushed: false };
 		await g.commit(message);
-		const pushResult = await g.push('origin');
+		try {
+			await g.pull('origin', branch, ['--rebase']);
+		} catch {
+			// Remote branch may not exist yet on first push
+		}
+		const pushResult = await g.push('origin', branch, ['-u']);
 		return { statusCode: 200, pushed: true, pushResult };
 	}
 
 	async pushMigrationFile(name: string, email: string, relativePath: string, content: string) {
 		const g = await this.ensureGit();
+		const branch = await this.ensureBranch(g);
 		const fs = await import('node:fs/promises');
-		const path = await import('node:path');
+		const pathMod = await import('node:path');
 
-		const fullPath = path.join(this.repoDir, relativePath);
-		await fs.mkdir(path.dirname(fullPath), { recursive: true });
+		// Pull first to avoid non-fast-forward reject on push
+		try {
+			await g.pull('origin', branch, ['--ff-only']);
+		} catch {
+			try {
+				await g.pull('origin', branch, ['--rebase']);
+			} catch {
+				// Remote branch may not exist yet
+			}
+		}
+
+		// Write under migration/ folder like the EE source control does
+		const migrationPath = pathMod.join('migration', relativePath);
+		const fullPath = pathMod.join(this.repoDir, migrationPath);
+		await fs.mkdir(pathMod.dirname(fullPath), { recursive: true });
 		await fs.writeFile(fullPath, content, 'utf8');
 
-		await g.add(relativePath);
+		await g.add(migrationPath);
 		await this.setUserIdentity(name, email);
-		await g.commit(`migration: ${relativePath}`);
-		return await g.push('origin');
+		await g.commit(`Publish migration: ${relativePath}`);
+		return await g.push('origin', branch, ['-u']);
 	}
 }

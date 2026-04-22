@@ -3,10 +3,12 @@ import { computed, ref, useCssModule } from 'vue';
 import { type ActionDropdownItem, N8nActionDropdown } from '@n8n/design-system';
 import type { WorkflowDataUpdate } from '@n8n/rest-api-client';
 import { publishMigrationToAzure } from '@n8n/rest-api-client/api/migration';
+import { useMessage } from '@/app/composables/useMessage';
 import { useToast } from '@/app/composables/useToast';
 import { useI18n } from '@n8n/i18n';
 import { createEventBus } from '@n8n/utils/event-bus';
 import {
+	MODAL_CONFIRM,
 	WORKFLOW_MENU_ACTIONS,
 	VIEWS,
 	DUPLICATE_MODAL_KEY,
@@ -53,6 +55,7 @@ const props = defineProps<{
 }>();
 
 const importFileRef = ref<HTMLInputElement | undefined>();
+const message = useMessage();
 const toast = useToast();
 const locale = useI18n();
 const route = useRoute();
@@ -185,28 +188,15 @@ const workflowMenuItems = computed<Array<ActionDropdownItem<WORKFLOW_MENU_ACTION
 		);
 	}
 
-	if (hasPermission(['rbac'], { rbac: { scope: 'sourceControl:push' } })) {
-		actions.push({
-			id: WORKFLOW_MENU_ACTIONS.PUSH,
-			label: locale.baseText('menuActions.push'),
-			disabled:
-				!sourceControlStore.isEnterpriseSourceControlEnabled ||
-				!onWorkflowPage.value ||
-				onExecutionsTab.value ||
-				sourceControlStore.preferences.branchReadOnly,
-		});
-	}
+	// Push to Git disabled — only Push to Azure is used
+	// if (hasPermission(['rbac'], { rbac: { scope: 'sourceControl:push' } })) { ... }
 
 	if (sourceControlStore.isEnterpriseSourceControlEnabled) {
 		actions.push({
 			id: WORKFLOW_MENU_ACTIONS.PUSH_TO_AZURE,
 			label: locale.baseText('menuActions.pushToAzure'),
 			disabled:
-				!onWorkflowPage.value ||
-				onExecutionsTab.value ||
-				!props.id ||
-				sourceControlStore.preferences.branchReadOnly ||
-				collaborationReadOnly.value,
+				!onWorkflowPage.value || onExecutionsTab.value || !props.id || collaborationReadOnly.value,
 		});
 	}
 
@@ -347,6 +337,18 @@ async function onWorkflowMenuSelect(action: WORKFLOW_MENU_ACTIONS): Promise<void
 		case WORKFLOW_MENU_ACTIONS.PUSH_TO_AZURE: {
 			const workflowId = getWorkflowId(props.id, route.params.name);
 			if (!workflowId) break;
+
+			const confirmation = await message.confirm(
+				'Değişiklikler onaya gönderilecektir. Devam etmek istiyor musunuz?',
+				'Onaya Gönderiliyor',
+				{
+					confirmButtonText: 'Evet',
+					cancelButtonText: 'Hayır',
+				},
+			);
+
+			if (confirmation !== MODAL_CONFIRM) break;
+
 			try {
 				const result = await publishMigrationToAzure(rootStore.restApiContext, workflowId);
 				toast.showMessage({

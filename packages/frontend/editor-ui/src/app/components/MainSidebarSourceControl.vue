@@ -85,8 +85,9 @@ function pullWorkfolder() {
 </script>
 
 <template>
+	<!-- Git source control sidebar hidden: only Push to Azure is used -->
 	<div
-		v-if="sourceControlAvailable"
+		v-if="false"
 		:class="{
 			[$style.sync]: true,
 			[$style.collapsed]: isCollapsed,
