@@ -3261,6 +3261,7 @@
 	"settings.sourceControl.branches": "Branch connected to this n8n instance",
 	"settings.sourceControl.protected": "{bold}: prevent editing workflows (recommended for production environments).",
 	"settings.sourceControl.protected.bold": "Protected instance",
+	"settings.sourceControl.protectedBranch.warning": "{branch} is a protected branch. Select another branch to publish changes.",
 	"settings.sourceControl.color": "Color",
 	"settings.sourceControl.switchBranch.title": "Switch to {branch} branch",
 	"settings.sourceControl.switchBranch.description": "Please confirm you want to switch the current n8n instance to the branch: {branch}",

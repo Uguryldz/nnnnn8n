@@ -42,3 +42,9 @@ export const SC_SSH_KEYS_DB_KEY = 'features.sourceControl.sshKeys';
 export const SC_HTTPS_CREDS_DB_KEY = 'features.sourceControl.httpsCredentials';
 export const SC_GIT_KEY_COMMENT = 'n8n deploy key';
 export const SC_DEFAULT_BRANCH = 'main';
+export const SC_PROTECTED_BRANCHES: readonly string[] = ['main'];
+
+export function isProtectedBranch(branch: string | undefined | null): boolean {
+	if (!branch) return false;
+	return SC_PROTECTED_BRANCHES.includes(branch.trim());
+}

@@ -77,6 +77,7 @@ function handleClick(e: MouseEvent) {
 }
 
 .metadata {
+	/* stylelint-disable-next-line @n8n/css-var-naming -- legacy token defined in design-system _tokens.scss */
 	color: var(--text-color--subtler);
 	overflow: hidden;
 	text-overflow: ellipsis;

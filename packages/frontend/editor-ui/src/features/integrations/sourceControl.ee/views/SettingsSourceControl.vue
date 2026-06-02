@@ -39,11 +39,22 @@ const connectionType = ref<'ssh' | 'https' | 'http'>('ssh');
 const httpsUsername = ref('');
 const httpsPassword = ref('');
 
+const protectedBranches = computed(() => sourceControlStore.preferences.protectedBranches ?? []);
+
+const isBranchProtected = (branch: string | undefined | null) =>
+	!!branch && protectedBranches.value.includes(branch);
+
 const branchNameOptions = computed(() =>
-	sourceControlStore.preferences.branches.map((branch) => ({
-		value: branch,
-		label: branch,
-	})),
+	sourceControlStore.preferences.branches
+		.filter((branch) => !isBranchProtected(branch))
+		.map((branch) => ({
+			value: branch,
+			label: branch,
+		})),
+);
+
+const isCurrentBranchProtected = computed(() =>
+	isBranchProtected(sourceControlStore.preferences.branchName),
 );
 
 const connectionTypeOptions = [
@@ -485,6 +496,17 @@ watch(connectionType, () => {
 						locale.baseText('settings.sourceControl.instanceSettings')
 					}}</N8nHeading>
 					<label>{{ locale.baseText('settings.sourceControl.branches') }}</label>
+					<N8nNotice
+						v-if="isCurrentBranchProtected"
+						theme="warning"
+						:content="
+							locale.baseText('settings.sourceControl.protectedBranch.warning', {
+								interpolate: { branch: sourceControlStore.preferences.branchName },
+							})
+						"
+						class="mb-s"
+						data-test-id="source-control-protected-branch-warning"
+					/>
 					<div :class="$style.branchSelection">
 						<N8nFormInput
 							id="branchName"
@@ -541,7 +563,7 @@ watch(connectionType, () => {
 				<div :class="[$style.group, 'pt-s']">
 					<N8nButton
 						size="large"
-						:disabled="!sourceControlStore.preferences.branchName"
+						:disabled="!sourceControlStore.preferences.branchName || isCurrentBranchProtected"
 						data-test-id="source-control-save-settings-button"
 						@click="onSave"
 						>{{ locale.baseText('settings.sourceControl.button.save') }}</N8nButton

@@ -10,26 +10,130 @@ import type {
 	Icon,
 } from 'n8n-workflow';
 
-function getPropertyByPath(object: unknown, path: string): unknown {
-	if (!path) return object;
+type PathSegment = { key: string } | { index: number };
 
-	const parts = path.split('.').filter((part) => part.length > 0);
-	let current: unknown = object;
+function parsePath(path: string): PathSegment[] {
+	if (!path?.trim()) return [];
+	const segments: PathSegment[] = [];
+	const regex = /([^.[\]]+)|\[(\d+)\]/g;
+	let m: RegExpExecArray | null;
+	while ((m = regex.exec(path.trim())) !== null) {
+		if (m[1] != null) segments.push({ key: m[1] });
+		else if (m[2] != null) segments.push({ index: parseInt(m[2], 10) });
+	}
+	return segments;
+}
 
-	for (const part of parts) {
-		if (!current || typeof current !== 'object') {
-			return undefined;
+function getByPath(obj: unknown, path: string): unknown {
+	let cur: unknown = obj;
+	for (const seg of parsePath(path)) {
+		if (cur == null || typeof cur !== 'object') return undefined;
+		if ('key' in seg) {
+			const r = cur as Record<string, unknown>;
+			if (!(seg.key in r)) return undefined;
+			cur = r[seg.key];
+		} else {
+			if (!Array.isArray(cur) || seg.index < 0 || seg.index >= cur.length) return undefined;
+			cur = cur[seg.index];
 		}
+	}
+	return cur;
+}
 
-		const record = current as Record<string, unknown>;
-		if (!(part in record)) {
-			return undefined;
+function findFirstKey(
+	obj: unknown,
+	keyName: string,
+	seen: WeakSet<object> = new WeakSet(),
+): unknown {
+	if (obj == null || typeof obj !== 'object') return undefined;
+	const key = keyName.trim();
+	if (!key) return undefined;
+	if (Array.isArray(obj)) {
+		for (const item of obj) {
+			const v = findFirstKey(item, keyName, seen);
+			if (v !== undefined) return v;
 		}
+		return undefined;
+	}
+	const r = obj as Record<string, unknown>;
+	if (seen.has(r)) return undefined;
+	seen.add(r);
+	if (Object.prototype.hasOwnProperty.call(r, key)) {
+		const val = r[key];
+		if (val != null) return val;
+	}
+	for (const k of Object.keys(r)) {
+		const v = findFirstKey(r[k], keyName, seen);
+		if (v !== undefined) return v;
+	}
+	return undefined;
+}
 
-		current = record[part];
+function getByExpression(body: unknown, expression: string): unknown {
+	const code = expression?.trim();
+	if (!code) return undefined;
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-implied-eval
+		const fn = new Function('body', `"use strict"; return (${code});`);
+		return fn(body);
+	} catch {
+		return undefined;
+	}
+}
+
+/** Raw/XML metin üzerinde regex ile tek yakalama grubundan token döndürür. */
+function getByRegex(body: unknown, pattern: string): unknown {
+	const str = typeof body === 'string' ? body : body == null ? '' : String(body);
+	const p = pattern?.trim();
+	if (!p) return undefined;
+	try {
+		const re = new RegExp(p);
+		const m = re.exec(str);
+		return m?.[1] ?? undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/** Body + mod + path/key ile token değerini döndürür. bodyIsRaw true ise string body JSON parse edilmez (Raw/XML). */
+function extractTokenFromBody(
+	body: unknown,
+	mode: string,
+	pathOrKey: string,
+	bodyIsRaw: boolean,
+): unknown {
+	const path = pathOrKey?.trim() || 'access_token';
+	if (mode === 'expression') return getByExpression(body, pathOrKey);
+	if (mode === 'regex') return getByRegex(body, pathOrKey);
+
+	let parsed: unknown = body;
+	// Raw/XML seçili değilse ve body string ise (JSON gibi başlıyorsa) parse dene
+	if (!bodyIsRaw && typeof body === 'string' && body.trimStart().startsWith('{')) {
+		try {
+			parsed = JSON.parse(body);
+		} catch {
+			// ignore
+		}
 	}
 
-	return current;
+	if (mode === 'findFirstKey') return findFirstKey(parsed, path);
+	return getByPath(parsed, path);
+}
+
+/** Response header'dan token okur (prefix kırpılır). */
+function readTokenFromHeader(
+	response: { headers?: Record<string, unknown> },
+	credentials: ICredentialDataDecryptedObject,
+): unknown {
+	const headers = response.headers ?? {};
+	const headerName = ((credentials.tokenHeaderName as string) || 'authorization').toLowerCase();
+	const prefix = (credentials.tokenHeaderPrefix as string) ?? 'Bearer ';
+	const key = Object.keys(headers).find((k) => k.toLowerCase() === headerName);
+	let value: unknown = key ? headers[key] : undefined;
+	if (typeof value === 'string' && prefix && value.startsWith(prefix)) {
+		value = value.slice(prefix.length);
+	}
+	return value;
 }
 
 export class HttpTokenApi implements ICredentialType {
@@ -51,6 +155,13 @@ export class HttpTokenApi implements ICredentialType {
 			typeOptions: {
 				expirable: true,
 			},
+			default: '',
+		},
+		{
+			displayName:
+				'<strong>Kullanım</strong>: HTTP Request node\'da Authentication → Generic Credential Type → "HTTP Token API" seçin. Token URL\'e istek atılır, dönen cevaptan token alınır. Body: Key/Value, Raw JSON veya <strong>Raw Text</strong> (XML/SOAP). Content-Type: JSON, Form, <strong>application/xml</strong>, <strong>application/soap+xml</strong> veya Diğer. <br/><br/><strong>Yanıt JSON ise</strong>: Path veya İlk bulunan anahtar. <strong>Yanıt XML/ham metin ise</strong>: <strong>Regex</strong> (tek yakalama grubu) veya <strong>Expression</strong> (<code>body</code> = ham string).',
+			name: 'usageNotice',
+			type: 'notice',
 			default: '',
 		},
 		{
@@ -98,9 +209,35 @@ export class HttpTokenApi implements ICredentialType {
 					name: 'Form URL Encoded (application/x-www-form-urlencoded)',
 					value: 'application/x-www-form-urlencoded',
 				},
+				{
+					name: 'XML (application/xml)',
+					value: 'application/xml',
+				},
+				{
+					name: 'SOAP XML (application/soap+xml)',
+					value: 'application/soap+xml',
+				},
+				{
+					name: 'Diğer (özel)',
+					value: 'other',
+					description: 'Content-Type değerini aşağıda kendiniz yazın',
+				},
 			],
 			default: 'application/json',
 			description: 'Token isteği için gövde içerik tipi',
+		},
+		{
+			displayName: 'Özel Content-Type',
+			name: 'contentTypeCustom',
+			type: 'string',
+			default: '',
+			placeholder: 'application/xml',
+			displayOptions: {
+				show: {
+					contentType: ['other'],
+				},
+			},
+			description: 'Kullanılacak Content-Type değeri (örn. application/xml, text/plain)',
 		},
 		{
 			displayName: 'Body Mode',
@@ -115,10 +252,15 @@ export class HttpTokenApi implements ICredentialType {
 					name: 'Raw JSON',
 					value: 'json',
 				},
+				{
+					name: 'Raw Text',
+					value: 'rawtext',
+					description: 'XML, SOAP veya herhangi bir ham metin gövdesi',
+				},
 			],
 			default: 'keypair',
 			description:
-				'Token isteğinin body kısmını key/value parametreleriyle mi, yoksa ham JSON ile mi tanımlayacağınızı seçin',
+				'Token isteğinin body kısmını key/value parametreleriyle mi, ham JSON ile mi yoksa ham metin ile mi tanımlayacağınızı seçin',
 		},
 		{
 			displayName: 'Body Parameters',
@@ -193,8 +335,7 @@ export class HttpTokenApi implements ICredentialType {
 					],
 				},
 			],
-			description:
-				'Password, client_secret vb. gizli değerler (yazarken maskeleme açık)',
+			description: 'Password, client_secret vb. gizli değerler (yazarken maskeleme açık)',
 		},
 		{
 			displayName: 'JSON Body',
@@ -210,12 +351,98 @@ export class HttpTokenApi implements ICredentialType {
 				'Token isteği için kullanılacak ham JSON body. Geçerli JSON değilse string olarak gönderilir.',
 		},
 		{
-			displayName: 'Token Property Path',
+			displayName: 'Raw Text Body',
+			name: 'rawTextBody',
+			type: 'string',
+			typeOptions: {
+				rows: 6,
+			},
+			default: '',
+			displayOptions: {
+				show: {
+					bodyMode: ['rawtext'],
+				},
+			},
+			description:
+				'Token isteği için ham metin gövdesi (XML, SOAP, plain text vb.). Content-Type ile uyumlu seçin.',
+		},
+		{
+			displayName: 'Token Path Mode',
+			name: 'tokenPathMode',
+			type: 'options',
+			options: [
+				{
+					name: 'Path (dot & array index)',
+					value: 'path',
+					description:
+						'Response JSON ise token alanının yolunu nokta (.) ve [indeks] ile yazın (örn. access_token, data.token).',
+				},
+				{
+					name: 'İlk bulunan anahtar (recursive)',
+					value: 'findFirstKey',
+					description:
+						'Response JSON ise gövdede bu isimde ilk bulunan özelliğin değerini kullanır.',
+				},
+				{
+					name: 'Regex (raw/XML)',
+					value: 'regex',
+					description:
+						'Yanıt XML veya ham metin ise: tek yakalama grubu olan regex ile token çıkarılır (örn. <token>([^<]+)</token>).',
+				},
+				{
+					name: 'JavaScript expression',
+					value: 'expression',
+					description:
+						'body = response gövdesi (string veya obje). JSON ve XML/ham metin için kullanılabilir.',
+				},
+			],
+			default: 'path',
+			description: 'JSON: Path veya İlk bulunan. XML/ham metin: Regex veya Expression kullanın.',
+		},
+		{
+			displayName:
+				'<strong>Path sözdizimi</strong>: Özellikler nokta (.) ile, dizi elemanları [sayı] ile. Dizi yoksa sadece nokta yeter (örn. <code>access_token</code>, <code>data.token</code>). Örnekler — Kök: <code>access_token</code>. İç içe: <code>data.token</code>. Dizinin ilk elemanı: <code>data.tokens[0]</code>. Dizi içinde özellik: <code>data.tokens[0].access_token</code>. İç içe dizi: <code>response.items[0].nested[0].value</code>.',
+			name: 'pathModeNotice',
+			type: 'notice',
+			default: '',
+			displayOptions: {
+				show: {
+					tokenPathMode: ['path'],
+				},
+			},
+		},
+		{
+			displayName:
+				'Response gövdesinde (obje veya dizi içinde) aranacak özellik adı. İlk bulunan eşleşmenin değeri token olarak kullanılır. Örn. <code>access_token</code>, <code>token</code>.',
+			name: 'findFirstKeyNotice',
+			type: 'notice',
+			default: '',
+			displayOptions: {
+				show: {
+					tokenPathMode: ['findFirstKey'],
+				},
+			},
+		},
+		{
+			displayName:
+				'XML/ham metin yanıtı için tek yakalama grubu olan regex. Token, ilk parantez grubundan alınır. Örn. <code>&lt;accessToken&gt;([^&lt;]+)&lt;/accessToken&gt;</code> veya <code>token=([^&amp;]+)</code>.',
+			name: 'regexModeNotice',
+			type: 'notice',
+			default: '',
+			displayOptions: {
+				show: {
+					tokenPathMode: ['regex'],
+				},
+			},
+		},
+		{
+			displayName: 'Token Property Path / Expression / Regex',
 			name: 'tokenPropertyPath',
 			type: 'string',
 			default: 'access_token',
 			description:
-				'Token değerinin response JSON içinde bulunduğu path (örn: access_token, data.token, result.session.id)',
+				'Path: Yol (access_token, data.token). İlk bulunan: Anahtar adı. Regex: Tek yakalama grubu (örn. <token>([^<]+)</token>). Expression: body ile token döndüren ifade.',
+			placeholder: 'access_token veya <token>([^<]+)</token>',
 			required: true,
 		},
 		{
@@ -226,6 +453,12 @@ export class HttpTokenApi implements ICredentialType {
 				{
 					name: 'Body (JSON)',
 					value: 'body',
+					description: 'Yanıt JSON; Path veya İlk bulunan anahtar kullanın',
+				},
+				{
+					name: 'Body (Raw/XML)',
+					value: 'bodyRaw',
+					description: 'Yanıt XML veya ham metin; Regex veya Expression kullanın',
 				},
 				{
 					name: 'Header',
@@ -233,7 +466,8 @@ export class HttpTokenApi implements ICredentialType {
 				},
 			],
 			default: 'body',
-			description: 'Token değerinin body mi yoksa response header içinden mi alınacağını seçin',
+			description:
+				'Token değerinin body (JSON veya Raw/XML) mi yoksa response header mı kullanılacağı',
 		},
 		{
 			displayName: 'Token Header Name',
@@ -283,29 +517,34 @@ export class HttpTokenApi implements ICredentialType {
 	): Promise<ICredentialDataDecryptedObject> {
 		const tokenUrl = credentials.tokenUrl as string;
 		const method = (credentials.method as IHttpRequestMethods) || 'POST';
+		const contentTypeRaw = (credentials.contentType as string) || 'application/json';
 		const contentType =
-			(credentials.contentType as string) || 'application/json';
+			contentTypeRaw === 'other' ? (credentials.contentTypeCustom as string) || '' : contentTypeRaw;
 		const bodyMode = (credentials.bodyMode as string) || 'keypair';
 		const ignoreSSLIssues = credentials.ignoreSSLIssues === true;
 		const tokenSource = (credentials.tokenSource as string) || 'body';
+		const bodyIsRaw = tokenSource === 'bodyRaw';
 
 		const headers: Record<string, string> = {};
-
 		if (contentType) {
 			headers['Content-Type'] = contentType;
 		}
 
-		let body: GenericValue | GenericValue[] | Buffer | URLSearchParams | undefined;
+		let body: GenericValue | GenericValue[] | Buffer | URLSearchParams | string | undefined;
 
 		if (bodyMode === 'keypair') {
 			const parameters =
-				(credentials.bodyParameters as {
-					parameters?: Array<{ name: string; value: string }>;
-				})?.parameters ?? [];
+				(
+					credentials.bodyParameters as {
+						parameters?: Array<{ name: string; value: string }>;
+					}
+				)?.parameters ?? [];
 			const secretParameters =
-				(credentials.secretBodyParameters as {
-					parameters?: Array<{ name: string; value: string }>;
-				})?.parameters ?? [];
+				(
+					credentials.secretBodyParameters as {
+						parameters?: Array<{ name: string; value: string }>;
+					}
+				)?.parameters ?? [];
 
 			const bodyObject: Record<string, string> = {};
 
@@ -340,6 +579,11 @@ export class HttpTokenApi implements ICredentialType {
 					body = rawJson;
 				}
 			}
+		} else if (bodyMode === 'rawtext') {
+			const rawText = (credentials.rawTextBody as string) ?? '';
+			if (rawText) {
+				body = rawText;
+			}
 		}
 
 		const response = await this.helpers.httpRequest({
@@ -351,45 +595,22 @@ export class HttpTokenApi implements ICredentialType {
 			returnFullResponse: true,
 		});
 
-		let rawToken: unknown;
+		const responseTyped = response as { body?: unknown; headers?: Record<string, unknown> };
+		const rawToken =
+			tokenSource === 'header'
+				? readTokenFromHeader(responseTyped, credentials)
+				: extractTokenFromBody(
+						responseTyped.body ?? response,
+						(credentials.tokenPathMode as string) || 'path',
+						(credentials.tokenPropertyPath as string) || 'access_token',
+						bodyIsRaw,
+					);
 
-		if (tokenSource === 'header') {
-			const headerName = ((credentials.tokenHeaderName as string) || 'authorization').toLowerCase();
-			const tokenHeaderPrefix = (credentials.tokenHeaderPrefix as string) ?? 'Bearer ';
-
-			const responseHeaders = (response as { headers?: Record<string, unknown> }).headers ?? {};
-			const matchedKey =
-				Object.keys(responseHeaders).find(
-					(key) => key.toLowerCase() === headerName,
-				) ?? '';
-
-			rawToken = matchedKey ? responseHeaders[matchedKey] : undefined;
-
-			if (typeof rawToken === 'string' && tokenHeaderPrefix) {
-				if (rawToken.startsWith(tokenHeaderPrefix)) {
-					rawToken = rawToken.slice(tokenHeaderPrefix.length);
-				}
-			}
-		} else {
-			const tokenPropertyPath =
-				(credentials.tokenPropertyPath as string) || 'access_token';
-			const responseBody =
-				(response as { body?: unknown }).body !== undefined
-					? (response as { body?: unknown }).body
-					: response;
-
-			rawToken = getPropertyByPath(responseBody, tokenPropertyPath);
+		if (rawToken == null || (typeof rawToken !== 'string' && typeof rawToken !== 'number')) {
+			throw new Error('Token alınamadı. Response içinde geçerli bir token bulunamadı.');
 		}
 
-		if (!rawToken || (typeof rawToken !== 'string' && typeof rawToken !== 'number')) {
-			throw new Error(
-				'Token alınamadı. Response içinde geçerli bir token bulunamadı.',
-			);
-		}
-
-		return {
-			accessToken: String(rawToken),
-		};
+		return { accessToken: String(rawToken) };
 	}
 
 	authenticate: IAuthenticateGeneric = {
@@ -403,15 +624,15 @@ export class HttpTokenApi implements ICredentialType {
 
 	test: ICredentialTestRequest = {
 		request: {
-			method: ('={{ $credentials.method || "POST" }}' as any) as IHttpRequestMethods,
+			method: '={{ $credentials.method || "POST" }}' as unknown as IHttpRequestMethods,
 			url: '={{ $credentials.tokenUrl }}',
 			skipSslCertificateValidation: '={{ $credentials.ignoreSSLIssues }}',
 			headers: {
-				'Content-Type': '={{ $credentials.contentType }}',
+				'Content-Type':
+					'={{ (() => { const ct = $credentials.contentType === "other" ? ($credentials.contentTypeCustom || "") : ($credentials.contentType || "application/json"); return ct || "application/json"; })() }}',
 				Accept: 'application/json',
 			},
-			body: '={{ $credentials.bodyMode === "json" ? (typeof $credentials.jsonBody === "string" ? JSON.parse($credentials.jsonBody || "{}") : $credentials.jsonBody || {}) : (() => { const acc = ($credentials.bodyParameters?.parameters || []).reduce((a, cur) => { if (cur && cur.name) { a[cur.name] = cur.value != null ? cur.value : ""; } return a; }, {}); ($credentials.secretBodyParameters?.parameters || []).forEach(cur => { if (cur && cur.name) { acc[cur.name] = cur.value != null ? cur.value : ""; } }); return acc; })() }}',
+			body: '={{ (function(){ var mode = $credentials.bodyMode || "keypair"; if (mode === "rawtext") return $credentials.rawTextBody != null ? String($credentials.rawTextBody) : ""; if (mode === "json") { try { var j = $credentials.jsonBody; if (typeof j === "object" && j !== null) return j; var s = typeof j === "string" ? j : "{}"; return s ? JSON.parse(s) : {}; } catch (_) { return {}; } } var acc = ($credentials.bodyParameters?.parameters || []).reduce(function(a, cur) { if (cur && cur.name) a[cur.name] = cur.value != null ? cur.value : ""; return a; }, {}); ($credentials.secretBodyParameters?.parameters || []).forEach(function(cur) { if (cur && cur.name) acc[cur.name] = cur.value != null ? cur.value : ""; }); return acc; })() }}',
 		},
 	};
 }
-

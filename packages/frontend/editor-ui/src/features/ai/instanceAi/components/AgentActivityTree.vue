@@ -51,6 +51,7 @@ const isHovered = useElementHover(triggerRef);
 
 <style lang="scss" module>
 .reasoningTrigger {
+	/* stylelint-disable-next-line @n8n/css-var-naming -- legacy token defined in design-system _tokens.scss */
 	color: var(--text-color--subtler);
 }
 

@@ -11,7 +11,7 @@ import { EventService } from '@/events/event.service';
 import { SCPreferencesService } from './sc-preferences.service';
 import { SCGitService } from './sc-git.service';
 import type { SCPreferences, SCRequest } from './sc-types';
-import { SC_DEFAULT_BRANCH } from './sc-types';
+import { SC_DEFAULT_BRANCH, SC_PROTECTED_BRANCHES, isProtectedBranch } from './sc-types';
 
 @RestController('/source-control')
 export class SourceControlController {
@@ -22,9 +22,13 @@ export class SourceControlController {
 	) {}
 
 	@Get('/preferences')
-	async getPreferences(): Promise<SCPreferences> {
+	async getPreferences(): Promise<SCPreferences & { protectedBranches: readonly string[] }> {
 		const pubKey = await this.prefsSvc.getPublicKey();
-		return { ...this.prefsSvc.getPreferences(), publicKey: pubKey };
+		return {
+			...this.prefsSvc.getPreferences(),
+			publicKey: pubKey,
+			protectedBranches: SC_PROTECTED_BRANCHES,
+		};
 	}
 
 	@Post('/preferences')
@@ -87,13 +91,21 @@ export class SourceControlController {
 			await this.prefsSvc.validatePreferences(sanitized);
 
 			if (sanitized.branchName && sanitized.branchName !== current.branchName) {
+				if (isProtectedBranch(sanitized.branchName)) {
+					throw new BadRequestError(
+						`'${sanitized.branchName}' is a protected branch and cannot be selected for publishing. Choose another branch.`,
+					);
+				}
 				await this.gitSvc.switchBranch(sanitized.branchName);
 			}
-			if (sanitized.branchColor ?? sanitized.branchReadOnly !== undefined) {
-				await this.prefsSvc.setPreferences({
-					branchColor: sanitized.branchColor,
-					branchReadOnly: sanitized.branchReadOnly,
-				}, true);
+
+			const persistPatch: Partial<SCPreferences> = {};
+			if (sanitized.branchName !== undefined) persistPatch.branchName = sanitized.branchName;
+			if (sanitized.branchColor !== undefined) persistPatch.branchColor = sanitized.branchColor;
+			if (sanitized.branchReadOnly !== undefined)
+				persistPatch.branchReadOnly = sanitized.branchReadOnly;
+			if (Object.keys(persistPatch).length > 0) {
+				await this.prefsSvc.setPreferences(persistPatch, true);
 			}
 
 			this.gitSvc.resetClient();
@@ -135,7 +147,8 @@ export class SourceControlController {
 	@Get('/get-branches')
 	async getBranches() {
 		try {
-			return await this.gitSvc.listBranches();
+			const result = await this.gitSvc.listBranches();
+			return { ...result, protectedBranches: SC_PROTECTED_BRANCHES };
 		} catch (e) {
 			throw new BadRequestError((e as Error).message);
 		}

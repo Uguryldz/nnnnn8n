@@ -89,11 +89,14 @@ export class SourceControlController {
 			if (sanitized.branchName && sanitized.branchName !== current.branchName) {
 				await this.gitSvc.switchBranch(sanitized.branchName);
 			}
-			if (sanitized.branchColor ?? sanitized.branchReadOnly !== undefined) {
-				await this.prefsSvc.setPreferences({
-					branchColor: sanitized.branchColor,
-					branchReadOnly: sanitized.branchReadOnly,
-				}, true);
+
+			const persistPatch: Partial<SCPreferences> = {};
+			if (sanitized.branchName !== undefined) persistPatch.branchName = sanitized.branchName;
+			if (sanitized.branchColor !== undefined) persistPatch.branchColor = sanitized.branchColor;
+			if (sanitized.branchReadOnly !== undefined)
+				persistPatch.branchReadOnly = sanitized.branchReadOnly;
+			if (Object.keys(persistPatch).length > 0) {
+				await this.prefsSvc.setPreferences(persistPatch, true);
 			}
 
 			this.gitSvc.resetClient();

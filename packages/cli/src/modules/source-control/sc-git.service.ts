@@ -6,7 +6,16 @@ import { mkdir } from 'node:fs/promises';
 import type { SimpleGit } from 'simple-git';
 
 import { SCPreferencesService } from './sc-preferences.service';
-import { SC_DEFAULT_BRANCH } from './sc-types';
+import { SC_DEFAULT_BRANCH, isProtectedBranch, SC_PROTECTED_BRANCHES } from './sc-types';
+
+class ProtectedBranchError extends Error {
+	constructor(branch: string) {
+		super(
+			`Push blocked: '${branch}' is a protected branch. Switch to another branch before publishing. (protected: ${SC_PROTECTED_BRANCHES.join(', ')})`,
+		);
+		this.name = 'ProtectedBranchError';
+	}
+}
 
 @Service()
 export class SCGitService {
@@ -28,14 +37,22 @@ export class SCGitService {
 		await mkdir(this.repoDir, { recursive: true });
 
 		const pref = this.prefs.getPreferences();
-		const env: Record<string, string> = {};
+		const env: Record<string, string> = { ...process.env } as Record<string, string>;
+		// Always prevent git/credential helpers from blocking on a TTY prompt,
+		// regardless of how creds were configured. Without this, git child can
+		// hang up to the simple-git block timeout when credentials are missing
+		// or rejected.
+		env.GIT_TERMINAL_PROMPT = '0';
+		env.GCM_INTERACTIVE = 'Never';
 
 		if (pref.connectionType === 'ssh' || !pref.connectionType) {
 			try {
 				const keyPath = await this.prefs.getPrivateKeyPath();
-				env.GIT_SSH_COMMAND = `ssh -i "${keyPath}" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="${path.join(this.prefs.sshFolder, 'known_hosts')}"`;
-			} catch {
-				this.logger.debug('No SSH key available yet');
+				env.GIT_SSH_COMMAND = `ssh -i "${keyPath}" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="${path.join(this.prefs.sshFolder, 'known_hosts')}" -o BatchMode=yes -o ConnectTimeout=15`;
+			} catch (err) {
+				this.logger.warn('source-control: SSH key not available', {
+					error: (err as Error).message,
+				});
 			}
 		} else if (pref.connectionType === 'https' || pref.connectionType === 'http') {
 			try {
@@ -45,9 +62,13 @@ export class SCGitService {
 					env.GIT_CONFIG_COUNT = '1';
 					env.GIT_CONFIG_KEY_0 = 'http.extraheader';
 					env.GIT_CONFIG_VALUE_0 = `Authorization: Basic ${token}`;
+				} else {
+					this.logger.warn('source-control: HTTPS credentials are empty');
 				}
-			} catch {
-				this.logger.debug('No HTTPS credentials available yet');
+			} catch (err) {
+				this.logger.warn('source-control: failed to load HTTPS credentials', {
+					error: (err as Error).message,
+				});
 			}
 		}
 
@@ -55,6 +76,7 @@ export class SCGitService {
 			baseDir: this.repoDir,
 			binary: 'git',
 			maxConcurrentProcesses: 1,
+			timeout: { block: 30_000 },
 		}).env(env);
 
 		return this.git;
@@ -65,6 +87,7 @@ export class SCGitService {
 	}
 
 	async initRepo(repoUrl: string, branch: string) {
+		this.logger.info('source-control: initRepo start', { repoUrl, branch });
 		const g = await this.ensureGit();
 		const isRepo = await g.checkIsRepo().catch(() => false);
 
@@ -81,7 +104,15 @@ export class SCGitService {
 			}
 		}
 
-		await g.fetch('origin');
+		try {
+			await g.fetch('origin');
+		} catch (err) {
+			this.logger.error('source-control: fetch origin failed', {
+				repoUrl,
+				error: (err as Error).message,
+			});
+			throw err;
+		}
 
 		const targetBranch = branch || SC_DEFAULT_BRANCH;
 		const branches = await g.branch();
@@ -113,13 +144,25 @@ export class SCGitService {
 	async listBranches(): Promise<{ branches: string[]; currentBranch: string }> {
 		const g = await this.ensureGit();
 		try {
-			await g.fetch('origin');
+			// --prune drops local refs to branches that were deleted on origin.
+			await g.fetch(['origin', '--prune']);
 		} catch {
 			/* offline ok */
 		}
 		const result = await g.branch(['-a']);
+
+		// Normalize: drop the "remotes/origin/" prefix, skip the HEAD pointer,
+		// and dedupe so a branch that exists both locally and remotely appears once.
+		const REMOTE_PREFIX = 'remotes/origin/';
+		const normalized = new Set<string>();
+		for (const ref of result.all) {
+			if (ref.includes('HEAD ->') || ref.endsWith('/HEAD')) continue;
+			const name = ref.startsWith(REMOTE_PREFIX) ? ref.slice(REMOTE_PREFIX.length) : ref;
+			if (name) normalized.add(name);
+		}
+
 		return {
-			branches: result.all,
+			branches: Array.from(normalized).sort(),
 			currentBranch: result.current,
 		};
 	}
@@ -148,6 +191,7 @@ export class SCGitService {
 	async pushWorkfolder(message: string) {
 		const g = await this.ensureGit();
 		const branch = await this.ensureBranch(g);
+		if (isProtectedBranch(branch)) throw new ProtectedBranchError(branch);
 		await g.add('.');
 		const status = await g.status();
 		if (status.staged.length === 0) return { statusCode: 200, pushed: false };
@@ -164,6 +208,7 @@ export class SCGitService {
 	async pushMigrationFile(name: string, email: string, relativePath: string, content: string) {
 		const g = await this.ensureGit();
 		const branch = await this.ensureBranch(g);
+		if (isProtectedBranch(branch)) throw new ProtectedBranchError(branch);
 		const fs = await import('node:fs/promises');
 		const pathMod = await import('node:path');
 
