@@ -4,8 +4,8 @@ volumes:
   ihub_prod_storage:
   redis_test_storage:
   redis_prod_storage:
-
-# Shared configuration for n8n instances
+  
+# Shared configuration for ss instances
 x-shared-n8n: &shared-n8n
   restart: always
   image: abradockerhub/ihub:v2.1.10
