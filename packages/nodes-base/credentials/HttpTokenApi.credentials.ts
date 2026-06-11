@@ -498,10 +498,10 @@ export class HttpTokenApi implements ICredentialType {
 			displayName: 'Authorization Prefix',
 			name: 'authPrefix',
 			type: 'string',
-			default: 'Bearer ',
+			default: '',
 			placeholder: 'Bearer ',
 			description:
-				'Authorization header ön eki (varsayılan: Bearer ). JWT , ApiKey vb. yazabilirsiniz; boş bırakırsanız Bearer kullanılır.',
+				'Authorization header ön eki. Boş bırakırsanız hiçbir ön ek eklenmez (token direkt gönderilir). İsterseniz Bearer, JWT, ApiKey vb. yazabilirsiniz.',
 		},
 		{
 			displayName: 'Ignore SSL Issues (Insecure)',
@@ -617,7 +617,7 @@ export class HttpTokenApi implements ICredentialType {
 		type: 'generic',
 		properties: {
 			headers: {
-				Authorization: '={{ ($credentials.authPrefix || "Bearer ") + $credentials.accessToken }}',
+				Authorization: '={{ ($credentials.authPrefix || "") + $credentials.accessToken }}',
 			},
 		},
 	};

@@ -13,8 +13,8 @@ const xmlParser = new XMLParser({
 	attributeNamePrefix: '@_',
 	removeNSPrefix: true,
 	trimValues: true,
-	parseAttributeValue: true,
-	parseTagValue: true,
+	parseAttributeValue: false,
+	parseTagValue: false,
 });
 
 export class XmlDataParser implements INodeType {
@@ -172,11 +172,9 @@ export class XmlDataParser implements INodeType {
 					itemIndex,
 					'',
 				) as string;
-				const xmlDataOutputType = this.getNodeParameter(
-					'xmlDataOutputType',
-					itemIndex,
-					'single',
-				) as 'single' | 'list';
+				const xmlDataOutputType = this.getNodeParameter('xmlDataOutputType', itemIndex, 'single') as
+					| 'single'
+					| 'list';
 				const rootPath = this.getNodeParameter('rootPath', itemIndex, 'Envelope') as string;
 
 				if (operation === 'parseXml') {
@@ -253,9 +251,7 @@ export class XmlDataParser implements INodeType {
 
 					// External list root path (opsiyonel) - parsedData içinden listeyi çıkar
 					if (externalOutputType === 'list' && externalListOutputRootPath) {
-						const pathParts = externalListOutputRootPath
-							.split('.')
-							.filter((p) => p.length > 0);
+						const pathParts = externalListOutputRootPath.split('.').filter((p) => p.length > 0);
 						let current: unknown = parsedData;
 
 						for (const part of pathParts) {
